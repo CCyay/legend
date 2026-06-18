@@ -1,0 +1,59 @@
+/** 卡牌效果说明（UI 展示用，与规则文档一致） */
+const DESCRIPTION_MAP : Map<string, string> = new Map([
+  ['king', '横置：从皇室弃牌区拿1张LV4勇者。打出需邻接勇者/卫兵。每打出1张LV≥4皇室卡+1金。场上最多4张皇室持续卡。'],
+  ['princess', '打出不消耗行动点。准备阶段稳定获得1枚金币。'],
+  ['holy_grail', '准备阶段：若只差1金即可获胜，直接宣告胜利。全场仅能留存1张圣杯。'],
+  ['holy_sword', '自身打出勇者时，将勇者「放置对手魔物」改为「弃置对手场上任意1张牌」；可强制翻面场上火龙。'],
+  ['blacksmith', '消耗1行动：将2张手牌铺至自己场上；两张LV/纹章相同则+1金。'],
+  ['fighter', '消耗1行动：铺全部手牌；铺牌总数偶数且无纹章卡在场，+1金。'],
+  ['guard', '被攻击时打出：无效本次攻击，攻击卡放置攻击者场上，随后摸1张牌。卫兵相邻卡无法被翻面。'],
+  ['nun', '对手弃置LV≥2卡牌时，直接将该弃牌收入自己手牌。'],
+  ['hero_lv4', '将对手1张魔物手牌放置其场上；勇者LV更高则+1金。'],
+  ['hero_lv5', '将对手1张魔物手牌放置其场上；目标带LV/首领纹章，+1金。'],
+  ['merchant', '指定金币多于自己的对手，强制对方支付1金；对方金币≤自己无收益。'],
+  ['zenglu', '不消耗行动点，从皇室弃牌堆拿1张LV1以外皇室卡，可直接打出或存入手牌。'],
+  ['wuniang', '持续：对手获得金币瞬间，可弃置五娘换取1枚金币。'],
+  ['holy_knight', '全场皇室LV+2；抵消全部LV≤3魔物攻击。'],
+  ['great_wizard', '宣言1个LV数字，对手交出对应等级手牌；无对应卡牌则己方+1金。'],
+  ['dragon_egg', '打出火龙的前置条件；不受卫兵翻面限制。'],
+  ['fire_dragon', '需龙蛋在场才能打出。对手抽牌时，可弃1手牌夺走对手刚抽的牌。'],
+  ['fairy', '对手每弃置1张手牌，自己+1金币。'],
+  ['goblin', '宣言对手卡牌名称，持有则弃置；卡牌带LV则己方+1金。'],
+  ['white_bone', '所有对手场上持续卡强制收回手牌。'],
+  ['witch', '被皇室攻击时打出：强制攻击者翻面1张场上卡，该卡本回合无法触发效果。'],
+  ['dragon_flame', '全体对手场上所有持续卡强制竖置重置。'],
+  ['slime', '打出直接获得1金币；单回合限打1张。'],
+  ['joker_girl', '强制对手铺高等级手牌，无对应卡牌己方+1金。'],
+  ['madman', '强制对手铺高等级手牌，无对应卡牌己方+1金。'],
+  ['fire_dragon_girl', '强制对手铺高等级手牌，无对应卡牌己方+1金。'],
+  ['demon_lord', '双方每回合抽牌数量-1（双人局）。'],
+  ['treasure_monster', '自己即将获得金币时打出：本次金币数量翻倍，使用后直接弃置。'],
+  ['black_knight', '放置对手1张手牌至其场上；目标带LV则+1金；目标带皇冠纹章，从任意弃牌区拿魔剑入手。'],
+  ['magic_sword', '自身所有攻击效果结算两次；被圣剑、卫兵完全克制。']
+])
+
+export function getCardDescription(cardId : string) : string {
+  const desc = DESCRIPTION_MAP.get(cardId)
+  return desc != null ? desc : '暂无效果说明'
+}
+
+export function getCardTypeLabel(cardType : string) : string {
+  if (cardType == 'attack') return '攻击'
+  if (cardType == 'trigger') return '触发'
+  if (cardType == 'continuous') return '持续'
+  return cardType
+}
+
+export function getCardTypeIcon(cardType : string) : string {
+  if (cardType == 'attack') return '△'
+  if (cardType == 'trigger') return '⚡'
+  if (cardType == 'continuous') return '●'
+  return ''
+}
+
+export function getEmblemLabel(emblem : string) : string {
+  if (emblem == 'crown') return '皇室'
+  if (emblem == 'dragon') return '魔龙'
+  if (emblem == 'demon') return '魔王'
+  return ''
+}

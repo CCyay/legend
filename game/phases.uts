@@ -1,0 +1,103 @@
+import type { GameState } from './types.uts'
+import { MAIN_ACTION_POINTS } from './types.uts'
+import { getCardDef } from './cards/catalog.uts'
+import { opponentId, getPlayer } from './cards/instance.uts'
+import { takeGoldFromPool } from './setup.uts'
+
+export function startPrepPhase(state : GameState) : GameState {
+  const player = getPlayer(state, state.activePlayerId)
+  if (player == null) return state
+
+  let next = { ...state, phase: 'prep' as const, flags: { ...state.flags, slimePlayedThisTurn: false } }
+  const returnedCards : import('./types.uts').CardInstance[] = []
+
+  const players = next.players.map((p) => {
+    if (p.id != state.activePlayerId) return p
+    const fieldCards = p.field.filter((c) => {
+      const def = getCardDef(c.defId)
+      return def != null && def.cardType == 'continuous'
+    })
+    returnedCards.push(...fieldCards)
+    const remaining = p.field.filter((c) => {
+      const def = getCardDef(c.defId)
+      return def == null || def.cardType != 'continuous'
+    })
+    return {
+      ...p,
+      hand: [...p.hand, ...fieldCards.map((c) => ({ ...c, tapped: false }))],
+      field: remaining
+    }
+  })
+  next = { ...next, players }
+
+  if (returnedCards.length >= 2) {
+    next = takeGoldFromPool(next, state.activePlayerId, 1)
+  }
+
+  for (let i = 0; i < returnedCards.length; i++) {
+    const def = getCardDef(returnedCards[i].defId)
+    if (def != null && def.id == 'princess') {
+      next = takeGoldFromPool(next, state.activePlayerId, 1)
+    }
+    if (def != null && def.id == 'holy_grail') {
+      const p = getPlayer(next, state.activePlayerId)
+      if (p != null && p.gold == 4) {
+        next = { ...next, winnerId: state.activePlayerId, phase: 'gameover' }
+      }
+    }
+  }
+
+  if (next.phase == 'gameover') return next
+  return enterMainPhase(next)
+}
+
+export function enterMainPhase(state : GameState) : GameState {
+  return {
+    ...state,
+    phase: 'main',
+    actionPoints: MAIN_ACTION_POINTS
+  }
+}
+
+export function enterEndPhase(state : GameState) : GameState {
+  const player = getPlayer(state, state.activePlayerId)
+  if (player == null) return state
+
+  let next : GameState = { ...state, phase: 'end' }
+
+  if (player.hand.length > 4) {
+    next = {
+      ...next,
+      pendingChoice: {
+        type: 'discard',
+        playerId: state.activePlayerId,
+        count: player.hand.length - 4,
+        selected: []
+      }
+    }
+    return next
+  }
+
+  return finishEndPhase(next)
+}
+
+export function finishEndPhase(state : GameState) : GameState {
+  const players = state.players.map((p) => ({
+    ...p,
+    field: p.field.map((c) => ({ ...c, tapped: false }))
+  }))
+  const nextPlayerId = opponentId({ players }, state.activePlayerId)
+  const nextTurn = state.turn + 1
+  let next : GameState = {
+    ...state,
+    players,
+    pendingChoice: null,
+    activePlayerId: nextPlayerId,
+    turn: nextTurn
+  }
+  return startPrepPhase(next)
+}
+
+export function spendActionPoint(state : GameState) : GameState {
+  return { ...state, actionPoints: Math.max(0, state.actionPoints - 1) }
+}

@@ -1,0 +1,79 @@
+import type { CardInstance, CardDef, Faction, PlayerState } from '../types.uts'
+import { getCardDef } from './catalog.uts'
+
+let instanceCounter = 0
+
+export function resetInstanceCounter() : void {
+  instanceCounter = 0
+}
+
+export function createInstance(defId : string, ownerId : string) : CardInstance {
+  instanceCounter++
+  return {
+    instanceId: `c${instanceCounter}`,
+    defId,
+    ownerId,
+    tapped: false,
+    faceDown: false
+  }
+}
+
+export function getDef(instance : CardInstance) : CardDef | null {
+  return getCardDef(instance.defId)
+}
+
+export function factionOf(instance : CardInstance) : Faction {
+  const def = getDef(instance)
+  return def != null ? def.faction : 'royal'
+}
+
+export function findInstance(state : { players : PlayerState[] }, instanceId : string) : CardInstance | null {
+  for (let p = 0; p < state.players.length; p++) {
+    const player = state.players[p]
+    for (let h = 0; h < player.hand.length; h++) {
+      if (player.hand[h].instanceId == instanceId) return player.hand[h]
+    }
+    for (let f = 0; f < player.field.length; f++) {
+      if (player.field[f].instanceId == instanceId) return player.field[f]
+    }
+  }
+  return null
+}
+
+export function findPlayerWithCard(state : { players : PlayerState[] }, instanceId : string) : PlayerState | null {
+  for (let p = 0; p < state.players.length; p++) {
+    const player = state.players[p]
+    for (let h = 0; h < player.hand.length; h++) {
+      if (player.hand[h].instanceId == instanceId) return player
+    }
+    for (let f = 0; f < player.field.length; f++) {
+      if (player.field[f].instanceId == instanceId) return player
+    }
+  }
+  return null
+}
+
+export function opponentId(state : { players : PlayerState[] }, playerId : string) : string {
+  for (let i = 0; i < state.players.length; i++) {
+    if (state.players[i].id != playerId) return state.players[i].id
+  }
+  return playerId
+}
+
+export function getPlayer(state : { players : PlayerState[] }, playerId : string) : PlayerState | null {
+  for (let i = 0; i < state.players.length; i++) {
+    if (state.players[i].id == playerId) return state.players[i]
+  }
+  return null
+}
+
+export function clonePlayers(players : PlayerState[]) : PlayerState[] {
+  return players.map((p) => ({
+    id: p.id,
+    name: p.name,
+    isHuman: p.isHuman,
+    gold: p.gold,
+    hand: p.hand.map((c) => ({ ...c })),
+    field: p.field.map((c) => ({ ...c }))
+  }))
+}

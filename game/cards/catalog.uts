@@ -1,0 +1,68 @@
+import type { CardDef } from '../types.uts'
+import { ROYAL_CARDS } from './royal.uts'
+import { MONSTER_CARDS } from './monster.uts'
+import { EX_CARDS, ROYAL_EX_IDS, MONSTER_EX_IDS } from './ex.uts'
+
+const ALL_DEFS : CardDef[] = [...ROYAL_CARDS, ...MONSTER_CARDS, ...EX_CARDS]
+
+const defMap = new Map<string, CardDef>()
+for (let i = 0; i < ALL_DEFS.length; i++) {
+  defMap.set(ALL_DEFS[i].id, ALL_DEFS[i])
+}
+
+export function getCardDef(id : string) : CardDef | null {
+  return defMap.get(id) ?? null
+}
+
+export function getAllCardDefs() : CardDef[] {
+  return ALL_DEFS.slice()
+}
+
+export function getRoyalBaseDefs() : CardDef[] {
+  return ROYAL_CARDS.slice()
+}
+
+export function getMonsterBaseDefs() : CardDef[] {
+  return MONSTER_CARDS.slice()
+}
+
+export function getExDefs() : CardDef[] {
+  return EX_CARDS.slice()
+}
+
+export function getRoyalExIds() : string[] {
+  return ROYAL_EX_IDS.slice()
+}
+
+export function getMonsterExIds() : string[] {
+  return MONSTER_EX_IDS.slice()
+}
+
+export function getCopyCount(def : CardDef, playerCount : number) : number {
+  if (playerCount == 2 && def.twoPlayerCopyCount != null) {
+    return def.twoPlayerCopyCount
+  }
+  return def.copyCount
+}
+
+/** 具名卡 ID 列表，供 catalog 测试校验 */
+export const NAMED_CARD_IDS : string[] = [
+  'king', 'princess', 'holy_grail', 'holy_sword', 'blacksmith', 'fighter',
+  'guard', 'nun', 'hero_lv4', 'hero_lv5', 'merchant', 'zenglu', 'wuniang',
+  'holy_knight', 'great_wizard',
+  'dragon_egg', 'fire_dragon', 'fairy', 'goblin', 'white_bone', 'witch',
+  'dragon_flame', 'slime', 'joker_girl', 'madman', 'fire_dragon_girl',
+  'demon_lord', 'treasure_monster', 'black_knight', 'magic_sword'
+]
+
+export function validateCatalog() : string[] {
+  const errors : string[] = []
+  for (let i = 0; i < NAMED_CARD_IDS.length; i++) {
+    const id = NAMED_CARD_IDS[i]
+    const def = getCardDef(id)
+    if (def == null) {
+      errors.push(`missing card: ${id}`)
+    }
+  }
+  return errors
+}

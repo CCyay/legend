@@ -1,0 +1,46 @@
+import type { GameState, Intent } from '../game/types.uts'
+import { createGame, dispatch } from '../game/engine.uts'
+
+export type GameStoreState = {
+  game : GameState | null
+  lastError : string
+  log : string[]
+}
+
+export const gameState = reactive({
+  game: null as GameState | null,
+  lastError: '',
+  log: [] as string[]
+} as GameStoreState)
+
+export function startNewGame(seed : number = Date.now()) : void {
+  gameState.game = createGame(seed, { playerCount: 2, humanFirst: true })
+  gameState.lastError = ''
+  gameState.log = ['新对局开始']
+}
+
+export function sendIntent(intent : Intent) : boolean {
+  if (gameState.game == null) return false
+  const result = dispatch(gameState.game, intent)
+  gameState.game = result.state
+  if (!result.ok && result.error != null) {
+    gameState.lastError = result.error
+    return false
+  }
+  gameState.lastError = ''
+  if (result.state.events.length > 0) {
+    const last = result.state.events[result.state.events.length - 1]
+    gameState.log = [...gameState.log, last.message]
+  }
+  return true
+}
+
+export function getHumanPlayer() {
+  if (gameState.game == null) return null
+  return gameState.game.players.find((p) => p.isHuman) ?? null
+}
+
+export function getAiPlayer() {
+  if (gameState.game == null) return null
+  return gameState.game.players.find((p) => !p.isHuman) ?? null
+}

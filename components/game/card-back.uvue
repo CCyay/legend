@@ -1,0 +1,54 @@
+<template>
+  <view
+    class="card-back"
+    :class="faction == 'royal' ? 'card-back--royal' : 'card-back--monster'">
+    <text class="card-back__icon">{{ faction == 'royal' ? '♛' : '♝' }}</text>
+    <text class="card-back__mark">{{ faction == 'royal' ? '皇室' : '魔物' }}</text>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { computed } from 'vue'
+import { getCardDef } from '@/game/cards/catalog.uts'
+
+const props = defineProps<{
+  defId : string
+}>()
+
+const faction = computed(() => {
+  const def = getCardDef(props.defId)
+  return def != null ? def.faction : 'monster'
+})
+</script>
+
+<style>
+.card-back {
+  width: 52px;
+  height: 76px;
+  margin: 4px;
+  border-radius: 8px;
+  border-width: 2px;
+  border-style: solid;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.card-back--royal {
+  background-color: #ffb300;
+  border-color: #ff8f00;
+}
+.card-back--monster {
+  background-color: #8e24aa;
+  border-color: #6a1b9a;
+}
+.card-back__icon {
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 4px;
+}
+.card-back__mark {
+  font-size: 10px;
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.95);
+}
+</style>

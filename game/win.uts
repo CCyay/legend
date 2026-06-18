@@ -1,0 +1,62 @@
+import type { GameState } from './types.uts'
+import { WIN_GOLD } from './types.uts'
+
+export type WinResult = {
+  winnerId : string | null
+  isDraw : boolean
+  reason : string
+}
+
+export function checkWin(state : GameState) : WinResult | null {
+  for (let i = 0; i < state.players.length; i++) {
+    const p = state.players[i]
+    if (p.gold >= WIN_GOLD) {
+      return { winnerId: p.id, isDraw: false, reason: 'five_gold' }
+    }
+  }
+
+  if (state.royalDeck.length == 0 && state.monsterDeck.length == 0) {
+    let bestId : string | null = null
+    let bestGold = -1
+    let bestHand = -1
+    let tie = false
+    for (let i = 0; i < state.players.length; i++) {
+      const p = state.players[i]
+      if (p.gold > bestGold) {
+        bestGold = p.gold
+        bestHand = p.hand.length
+        bestId = p.id
+        tie = false
+      } else if (p.gold == bestGold) {
+        if (p.hand.length > bestHand) {
+          bestHand = p.hand.length
+          bestId = p.id
+          tie = false
+        } else if (p.hand.length == bestHand) {
+          tie = true
+        }
+      }
+    }
+    if (tie) {
+      return { winnerId: null, isDraw: true, reason: 'deckout_tie' }
+    }
+    return { winnerId: bestId, isDraw: false, reason: 'deckout' }
+  }
+  return null
+}
+
+export function applyWinCheck(state : GameState) : GameState {
+  const result = checkWin(state)
+  if (result == null) return state
+  return {
+    ...state,
+    phase: 'gameover',
+    winnerId: result.winnerId,
+    isDraw: result.isDraw,
+    events: [...state.events, {
+      tick: state.tick,
+      type: 'game_over',
+      message: result.isDraw ? '和局' : `胜者 ${result.winnerId}`
+    }]
+  }
+}

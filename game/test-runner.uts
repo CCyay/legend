@@ -1,0 +1,80 @@
+import { validateCatalog, NAMED_CARD_IDS, getCardDef } from './cards/catalog.uts'
+import { createGame } from './setup.uts'
+import { dispatch } from './engine.uts'
+import { HUMAN_PLAYER_ID } from './types.uts'
+
+export function runCatalogTests() : string[] {
+  const errors : string[] = []
+  errors.push(...validateCatalog())
+
+  if (NAMED_CARD_IDS.length < 30) {
+    errors.push(`named cards count ${NAMED_CARD_IDS.length} < 30`)
+  }
+
+  for (let i = 0; i < NAMED_CARD_IDS.length; i++) {
+    const def = getCardDef(NAMED_CARD_IDS[i])
+    if (def == null) continue
+    if (def.id == 'slime' && !def.tags.includes('once_per_turn')) {
+      errors.push('slime missing once_per_turn tag')
+    }
+    if (def.id == 'princess' && !def.freeAction) {
+      errors.push('princess should be freeAction')
+    }
+    if (def.id == 'zenglu' && !def.freeAction) {
+      errors.push('zenglu should be freeAction')
+    }
+  }
+  return errors
+}
+
+export function runSetupTests() : string[] {
+  const errors : string[] = []
+  const state = createGame(42, { playerCount: 2, humanFirst: true })
+
+  if (state.turn != 1) errors.push('turn should be 1')
+  if (state.phase != 'main') errors.push('first turn should skip prep -> main')
+  if (state.goldPool != 21) errors.push('gold pool should be 21')
+  if (state.players[0].hand.length != 3) errors.push('p0 should have 3 cards')
+  if (state.players[1].hand.length != 3) errors.push('p1 should have 3 cards')
+  if (state.removedEx.length != 5) errors.push('should remove 5 EX cards in 2p')
+
+  let royalBlacksmith = 0
+  for (let i = 0; i < state.royalDeck.length; i++) {
+    if (state.royalDeck[i] == 'blacksmith') royalBlacksmith++
+  }
+  if (royalBlacksmith != 3) errors.push(`blacksmith count ${royalBlacksmith} != 3`)
+
+  let royalFighter = 0
+  for (let i = 0; i < state.royalDeck.length; i++) {
+    if (state.royalDeck[i] == 'fighter') royalFighter++
+  }
+  if (royalFighter != 3) errors.push(`fighter count ${royalFighter} != 3`)
+
+  const state2 = createGame(42, { playerCount: 2, humanFirst: true })
+  if (state.royalDeck.join(',') != state2.royalDeck.join(',')) {
+    errors.push('same seed should produce same deck')
+  }
+
+  return errors
+}
+
+export function runEngineSmoke() : string[] {
+  const errors : string[] = []
+  let state = createGame(100, { playerCount: 2, humanFirst: true })
+
+  const draw = dispatch(state, { type: 'draw', playerId: HUMAN_PLAYER_ID, pile: 'royal' })
+  if (!draw.ok) errors.push('draw should succeed')
+  state = draw.state
+  if (state.actionPoints != 1) errors.push('AP should be 1 after draw')
+
+  return errors
+}
+
+export function runAllGameTests() : { passed : boolean; errors : string[] } {
+  const errors = [
+    ...runCatalogTests(),
+    ...runSetupTests(),
+    ...runEngineSmoke()
+  ]
+  return { passed: errors.length == 0, errors }
+}

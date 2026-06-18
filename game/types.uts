@@ -1,0 +1,148 @@
+/**
+ * 游戏引擎核心类型
+ * Intent: 玩家/AI 提交的操作意图
+ * Phase: Prep | Main | End | Response
+ */
+
+export type Faction = 'royal' | 'monster'
+export type CardType = 'attack' | 'trigger' | 'continuous'
+export type Emblem = 'none' | 'crown' | 'dragon' | 'demon'
+export type GamePhase = 'prep' | 'main' | 'end' | 'response' | 'gameover'
+export type DrawPile = 'royal' | 'monster'
+
+export type EffectKind =
+  | 'gainGold'
+  | 'drawCard'
+  | 'discardHand'
+  | 'placeOnField'
+  | 'returnFieldToHand'
+  | 'resetAllContinuous'
+  | 'declareLevel'
+  | 'declareName'
+  | 'stealGold'
+  | 'custom'
+
+export type EffectDef = {
+  kind : EffectKind
+  handlerId ?: string
+  params ?: UTSJSONObject
+}
+
+export type CardDef = {
+  id : string
+  name : string
+  faction : Faction
+  cardType : CardType
+  level : number
+  emblem : Emblem
+  copyCount : number
+  twoPlayerCopyCount ?: number
+  freeAction : boolean
+  royalFamily : boolean
+  priorityEmblem : boolean
+  effects : EffectDef[]
+  tags : string[]
+}
+
+export type CardInstance = {
+  instanceId : string
+  defId : string
+  ownerId : string
+  tapped : boolean
+  faceDown : boolean
+}
+
+export type PlayerId = string
+
+export type PlayerState = {
+  id : PlayerId
+  name : string
+  isHuman : boolean
+  gold : number
+  hand : CardInstance[]
+  field : CardInstance[]
+}
+
+export type GameState = {
+  seed : number
+  tick : number
+  turn : number
+  phase : GamePhase
+  activePlayerId : PlayerId
+  actionPoints : number
+  goldPool : number
+  players : PlayerState[]
+  royalDeck : string[]
+  monsterDeck : string[]
+  royalDiscard : CardInstance[]
+  monsterDiscard : CardInstance[]
+  removedEx : string[]
+  stack : StackItem[]
+  responseWindow : ResponseWindow | null
+  pendingChoice : PendingChoice | null
+  winnerId : string | null
+  isDraw : boolean
+  events : GameEvent[]
+  flags : GameFlags
+}
+
+export type GameFlags = {
+  slimePlayedThisTurn : boolean
+  holyGrailOnField : boolean
+}
+
+export type StackItem = {
+  id : string
+  sourceInstanceId : string
+  controllerId : PlayerId
+  kind : 'attack' | 'trigger' | 'passive' | 'active'
+  handlerId : string
+  resolved : boolean
+}
+
+export type ResponseWindow = {
+  reason : 'attack' | 'goldGain' | 'discard'
+  attackerId : PlayerId
+  targetId : PlayerId
+  attackCardInstanceId : string
+  responders : PlayerId[]
+  passed : string[]
+}
+
+export type PendingChoice =
+  | { type : 'discard'; playerId : PlayerId; count : number; selected : string[] }
+  | { type : 'pickHand'; playerId : PlayerId; count : number; filter ?: string }
+  | { type : 'pickField'; playerId : PlayerId; targetPlayerId : PlayerId; count : number }
+  | { type : 'declareLevel'; playerId : PlayerId; levels : number[] }
+  | { type : 'declareName'; playerId : PlayerId; names : string[] }
+  | { type : 'pickFromDiscard'; playerId : PlayerId; faction : Faction; count : number }
+  | { type : 'confirm'; playerId : PlayerId; message : string }
+
+export type GameEvent = {
+  tick : number
+  type : string
+  message : string
+}
+
+export type Intent =
+  | { type : 'draw'; playerId : PlayerId; pile : DrawPile }
+  | { type : 'playCard'; playerId : PlayerId; instanceId : string; targets ?: string[] }
+  | { type : 'passResponse'; playerId : PlayerId }
+  | { type : 'endPhase'; playerId : PlayerId }
+  | { type : 'discard'; playerId : PlayerId; instanceIds : string[] }
+  | { type : 'selectTargets'; playerId : PlayerId; instanceIds : string[] }
+  | { type : 'declare'; playerId : PlayerId; value : string | number }
+
+export type DispatchResult = {
+  state : GameState
+  ok : boolean
+  error ?: string
+}
+
+export const HUMAN_PLAYER_ID = 'p0'
+export const AI_PLAYER_ID = 'p1'
+export const WIN_GOLD = 5
+export const HAND_LIMIT = 4
+export const MAIN_ACTION_POINTS = 2
+export const INITIAL_HAND = 3
+export const TOTAL_GOLD_POOL = 21

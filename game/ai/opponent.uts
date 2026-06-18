@@ -1,0 +1,71 @@
+import type { GameState, Intent } from '../types.uts'
+import { AI_PLAYER_ID, HUMAN_PLAYER_ID } from '../types.uts'
+import { getCardDef } from '../cards/catalog.uts'
+import { canPlayCard } from '../effects/handlers/index.uts'
+
+export function pickAiTurn(state : GameState) : Intent[] {
+  if (state.phase == 'gameover') return []
+  const intents : Intent[] = []
+
+  if (state.responseWindow != null && state.responseWindow.targetId == AI_PLAYER_ID) {
+    const ai = state.players.find((p) => p.id == AI_PLAYER_ID)
+    if (ai != null) {
+      for (let i = 0; i < ai.hand.length; i++) {
+        const card = ai.hand[i]
+        const def = getCardDef(card.defId)
+        if (def != null && def.cardType == 'trigger' && def.id == 'guard') {
+          if (canPlayCard(state, AI_PLAYER_ID, card.instanceId)) {
+            intents.push({ type: 'playCard', playerId: AI_PLAYER_ID, instanceId: card.instanceId })
+            return intents
+          }
+        }
+      }
+    }
+    intents.push({ type: 'passResponse', playerId: AI_PLAYER_ID })
+    return intents
+  }
+
+  if (state.activePlayerId != AI_PLAYER_ID) return []
+
+  if (state.phase == 'main') {
+    const ai = state.players.find((p) => p.id == AI_PLAYER_ID)
+    if (ai == null) return intents
+
+    for (let i = 0; i < ai.hand.length; i++) {
+      const card = ai.hand[i]
+      const def = getCardDef(card.defId)
+      if (def != null && def.id == 'slime' && canPlayCard(state, AI_PLAYER_ID, card.instanceId)) {
+        intents.push({ type: 'playCard', playerId: AI_PLAYER_ID, instanceId: card.instanceId })
+        if (state.actionPoints <= 1) {
+          intents.push({ type: 'endPhase', playerId: AI_PLAYER_ID })
+        }
+        return intents
+      }
+    }
+
+    if (state.actionPoints > 0) {
+      const pile = state.monsterDeck.length > 0 ? 'monster' : 'royal'
+      intents.push({ type: 'draw', playerId: AI_PLAYER_ID, pile: pile as 'royal' | 'monster' })
+    }
+
+    if (state.actionPoints > 1) {
+      intents.push({ type: 'draw', playerId: AI_PLAYER_ID, pile: 'royal' })
+    }
+
+    intents.push({ type: 'endPhase', playerId: AI_PLAYER_ID })
+    return intents
+  }
+
+  if (state.phase == 'end' && state.pendingChoice != null) {
+    const choice = state.pendingChoice
+    if (choice.type == 'discard' && choice.playerId == AI_PLAYER_ID) {
+      const ai = state.players.find((p) => p.id == AI_PLAYER_ID)
+      if (ai != null && ai.hand.length > 4) {
+        const toDiscard = ai.hand.slice(0, ai.hand.length - 4).map((c) => c.instanceId)
+        intents.push({ type: 'discard', playerId: AI_PLAYER_ID, instanceIds: toDiscard })
+      }
+    }
+  }
+
+  return intents
+}

@@ -1,0 +1,175 @@
+import type { GameState, Intent, DispatchResult, PlayerId } from './types.uts'
+import { getCardDef } from './cards/catalog.uts'
+import { findInstance, getPlayer } from './cards/instance.uts'
+import { createGame } from './setup.uts'
+import { drawFromPile, discardCard } from './setup.uts'
+import { enterEndPhase, spendActionPoint, finishEndPhase, startPrepPhase } from './phases.uts'
+import { applyWinCheck } from './win.uts'
+import { canPlayCard, resolveCardOnPlay, resolveGuard, applyResolvedAttack } from './effects/handlers/index.uts'
+
+export function dispatch(state : GameState, intent : Intent) : DispatchResult {
+  if (state.phase == 'gameover') {
+    return { state, ok: false, error: '对局已结束' }
+  }
+
+  switch (intent.type) {
+    case 'draw':
+      return handleDraw(state, intent.playerId, intent.pile)
+    case 'playCard':
+      return handlePlayCard(state, intent.playerId, intent.instanceId)
+    case 'passResponse':
+      return handlePassResponse(state, intent.playerId)
+    case 'endPhase':
+      return handleEndPhase(state, intent.playerId)
+    case 'discard':
+      return handleDiscard(state, intent.playerId, intent.instanceIds)
+    default:
+      return { state, ok: false, error: '未知意图' }
+  }
+}
+
+function handleDraw(state : GameState, playerId : PlayerId, pile : 'royal' | 'monster') : DispatchResult {
+  if (state.phase != 'main' || state.activePlayerId != playerId) {
+    return { state, ok: false, error: '仅主要阶段可抽牌' }
+  }
+  if (state.actionPoints <= 0) {
+    return { state, ok: false, error: '行动点不足' }
+  }
+  const deck = pile == 'royal' ? state.royalDeck : state.monsterDeck
+  if (deck.length == 0) {
+    let next = applyWinCheck(state)
+    return { state: next, ok: false, error: '牌库已空' }
+  }
+  let next = drawFromPile(state, playerId, pile)
+  next = spendActionPoint(next)
+  next = applyWinCheck(next)
+  return { state: next, ok: true }
+}
+
+function handlePlayCard(state : GameState, playerId : string, instanceId : string) : DispatchResult {
+  if (!canPlayCard(state, playerId, instanceId)) {
+    return { state, ok: false, error: '无法打出该牌' }
+  }
+  const inst = findInstance(state, instanceId)!
+  const def = getCardDef(inst.defId)!
+  let next = state
+
+  if (state.responseWindow != null && def.cardType == 'trigger') {
+    if (def.id == 'guard') {
+      next = resolveGuard(state, playerId, inst)
+      next = applyWinCheck(next)
+      return { state: next, ok: true }
+    }
+    if (def.id == 'witch') {
+      next = resolveCardOnPlay({ state, source: inst, controllerId: playerId })
+      next = applyWinCheck(next)
+      return { state: next, ok: true }
+    }
+  }
+
+  if (state.phase == 'main' && state.activePlayerId == playerId) {
+    if (!def.freeAction && def.cardType != 'trigger') {
+      next = spendActionPoint(next)
+    }
+    if (def.id == 'slime') {
+      next = { ...next, flags: { ...next.flags, slimePlayedThisTurn: true } }
+    }
+    if (def.cardType == 'attack') {
+      const directAttacks = ['slime', 'white_bone', 'dragon_flame', 'merchant', 'hero_lv4', 'hero_lv5', 'goblin', 'zenglu', 'great_wizard']
+      if (directAttacks.includes(def.id)) {
+        next = removeCardFromHand(next, playerId, instanceId)
+        next = applyResolvedAttack(next, playerId, inst)
+        next = discardCard(next, inst)
+      } else {
+        next = resolveCardOnPlay({ state: next, source: inst, controllerId: playerId })
+      }
+    } else {
+      next = removeCardFromHand(next, playerId, instanceId)
+      if (def.cardType == 'continuous') {
+        next = resolveCardOnPlay({ state: next, source: inst, controllerId: playerId })
+      } else {
+        next = resolveCardOnPlay({ state: next, source: inst, controllerId: playerId })
+      }
+    }
+    next = applyWinCheck(next)
+    return { state: next, ok: true }
+  }
+
+  return { state, ok: false, error: '出牌时机不合法' }
+}
+
+function removeCardFromHand(state : GameState, playerId : string, instanceId : string) : GameState {
+  const players = state.players.map((p) => {
+    if (p.id != playerId) return p
+    return { ...p, hand: p.hand.filter((c) => c.instanceId != instanceId) }
+  })
+  return { ...state, players }
+}
+
+function handlePassResponse(state : GameState, playerId : string) : DispatchResult {
+  const win = state.responseWindow
+  if (win == null) return { state, ok: false, error: '无响应窗口' }
+  const passed = [...win.passed, playerId]
+  if (passed.length >= win.responders.length) {
+    let next = resolveAttack(state)
+    next = { ...next, responseWindow: null, phase: 'main' }
+    next = applyWinCheck(next)
+    return { state: next, ok: true }
+  }
+  return {
+    state: { ...state, responseWindow: { ...win, passed } },
+    ok: true
+  }
+}
+
+function resolveAttack(state : GameState) : GameState {
+  const win = state.responseWindow
+  if (win == null) return state
+  const attackInst = findInstance(state, win.attackCardInstanceId)
+  if (attackInst == null) return state
+  let next = removeCardFromHand(state, win.attackerId, win.attackCardInstanceId)
+  next = applyResolvedAttack(next, win.attackerId, attackInst)
+  next = {
+    ...next,
+    responseWindow: null,
+    phase: 'main',
+    stack: next.stack.map((s) => ({ ...s, resolved: true }))
+  }
+  return next
+}
+
+function handleEndPhase(state : GameState, playerId : string) : DispatchResult {
+  if (state.activePlayerId != playerId) {
+    return { state, ok: false, error: '非当前玩家' }
+  }
+  if (state.phase == 'main') {
+    let next = enterEndPhase(state)
+    if (next.pendingChoice != null) {
+      return { state: next, ok: true }
+    }
+    next = finishEndPhase(next)
+    next = applyWinCheck(next)
+    return { state: next, ok: true }
+  }
+  return { state, ok: false, error: '当前阶段不可结束' }
+}
+
+function handleDiscard(state : GameState, playerId : string, instanceIds : string[]) : DispatchResult {
+  const choice = state.pendingChoice
+  if (choice == null || choice.type != 'discard' || choice.playerId != playerId) {
+    return { state, ok: false, error: '无弃牌选择' }
+  }
+  if (instanceIds.length != choice.count) {
+    return { state, ok: false, error: '弃牌数量不正确' }
+  }
+  let next = state
+  for (let i = 0; i < instanceIds.length; i++) {
+    const inst = findInstance(next, instanceIds[i])
+    if (inst != null) next = discardCard(next, inst)
+  }
+  next = finishEndPhase({ ...next, pendingChoice: null })
+  next = applyWinCheck(next)
+  return { state: next, ok: true }
+}
+
+export { createGame }

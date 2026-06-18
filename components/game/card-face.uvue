@@ -1,0 +1,124 @@
+<template>
+  <view
+    v-if="info != null"
+    class="card-face"
+    :class="[factionClass, compact ? 'card-face--compact' : '', handMode ? 'card-face--hand' : '']"
+    @click="onTap">
+    <view class="card-face__header">
+      <text class="card-face__level">{{ info!.levelText }}</text>
+      <text class="card-face__type">{{ info!.typeIcon }}{{ info!.typeLabel }}</text>
+      <text v-if="info!.emblemLabel != ''" class="card-face__emblem">{{ info!.emblemLabel }}</text>
+      <text v-if="info!.freeAction" class="card-face__free">免费</text>
+    </view>
+    <text class="card-face__name">{{ info!.name }}</text>
+    <text v-if="handMode" class="card-face__desc card-face__desc--hand" :lines="5">{{ info!.description }}</text>
+    <text v-else-if="!compact" class="card-face__desc">{{ info!.description }}</text>
+    <text v-else class="card-face__desc card-face__desc--compact" :lines="3">{{ info!.description }}</text>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { computed } from 'vue'
+import { getCardDisplayByDefId } from '@/game/cards/display.uts'
+
+const props = defineProps<{
+  defId : string
+  compact ?: boolean
+  handMode ?: boolean
+}>()
+
+const emit = defineEmits<{
+  (e : 'click') : void
+}>()
+
+const info = computed(() => getCardDisplayByDefId(props.defId))
+
+const factionClass = computed(() => {
+  const i = info.value
+  if (i == null) return ''
+  return i.faction == 'royal' ? 'card-face--royal' : 'card-face--monster'
+})
+
+function onTap() {
+  emit('click')
+}
+</script>
+
+<style>
+.card-face {
+  width: 160px;
+  min-height: 120px;
+  padding: 10px;
+  margin: 6px 4px;
+  border-radius: 10px;
+  border-width: 1px;
+  border-style: solid;
+  flex-shrink: 0;
+}
+.card-face--hand {
+  width: 136px;
+  min-height: 168px;
+}
+.card-face--royal {
+  background-color: #fff8e1;
+  border-color: #ffc107;
+}
+.card-face--monster {
+  background-color: #f3e5f5;
+  border-color: #9c27b0;
+}
+.card-face--compact {
+  width: 140px;
+  min-height: 96px;
+  padding: 8px;
+}
+.card-face__header {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.card-face__level {
+  font-size: 12px;
+  font-weight: bold;
+  color: #333;
+  margin-right: 6px;
+}
+.card-face__type {
+  font-size: 11px;
+  color: #555;
+  margin-right: 6px;
+}
+.card-face__emblem {
+  font-size: 10px;
+  color: #888;
+  margin-right: 4px;
+}
+.card-face__free {
+  font-size: 10px;
+  color: #e65100;
+  background-color: #ffe0b2;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.card-face__name {
+  font-size: 15px;
+  font-weight: bold;
+  color: #1a1a1a;
+  margin-bottom: 6px;
+}
+.card-face__desc {
+  font-size: 11px;
+  color: #444;
+  line-height: 16px;
+  flex-shrink: 0;
+}
+.card-face__desc--hand {
+  font-size: 10px;
+  line-height: 15px;
+}
+.card-face__desc--compact {
+  font-size: 10px;
+  line-height: 14px;
+}
+</style>

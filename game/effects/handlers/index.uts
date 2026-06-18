@@ -1,0 +1,272 @@
+import type { GameState, CardInstance, PlayerId } from '../../types.uts'
+import { getCardDef } from '../../cards/catalog.uts'
+import {
+  opponentId, getPlayer, findInstance
+} from '../../cards/instance.uts'
+import {
+  drawFromPile, takeGoldFromPool, discardCard, addToField,
+  removeFromHand, placeOnOpponentField
+} from '../../setup.uts'
+import { spendActionPoint } from '../../phases.uts'
+
+export type EffectContext = {
+  state : GameState
+  source : CardInstance
+  controllerId : PlayerId
+}
+
+export function resolveCardOnPlay(ctx : EffectContext) : GameState {
+  const def = getCardDef(ctx.source.defId)
+  if (def == null) return ctx.state
+
+  switch (def.id) {
+    case 'slime':
+      return discardCard(takeGoldFromPool(ctx.state, ctx.controllerId, 1), ctx.source)
+    case 'goblin':
+      return startDeclareName(ctx.state, ctx.controllerId, ctx.source)
+    case 'hero_lv4':
+      return startPlaceMonsterHand(ctx.state, ctx.controllerId, ctx.source, 4)
+    case 'hero_lv5':
+      return startPlaceMonsterHand(ctx.state, ctx.controllerId, ctx.source, 5)
+    case 'guard':
+      return resolveGuard(ctx.state, ctx.controllerId, ctx.source)
+    case 'witch':
+      return resolveWitch(ctx.state, ctx.controllerId, ctx.source)
+    case 'white_bone':
+      return returnAllOpponentContinuous(ctx.state, ctx.controllerId)
+    case 'dragon_flame':
+      return untapAllOpponentContinuous(ctx.state, ctx.controllerId)
+    case 'merchant':
+      return resolveMerchant(ctx.state, ctx.controllerId)
+    case 'zenglu':
+      return resolveZenglu(ctx.state, ctx.controllerId, ctx.source)
+    case 'great_wizard':
+      return {
+        ...ctx.state,
+        pendingChoice: { type: 'declareLevel', playerId: ctx.controllerId, levels: [0, 1, 2, 3, 4, 5, 6] }
+      }
+    case 'black_knight':
+    case 'joker_girl':
+    case 'madman':
+    case 'fire_dragon_girl':
+      return openAttackResponse(ctx.state, ctx.controllerId, ctx.source)
+    case 'princess':
+    case 'king':
+    case 'holy_grail':
+    case 'holy_sword':
+    case 'blacksmith':
+    case 'fighter':
+    case 'wuniang':
+    case 'dragon_egg':
+    case 'fire_dragon':
+    case 'fairy':
+    case 'demon_lord':
+    case 'magic_sword':
+      return addToField(ctx.state, ctx.controllerId, ctx.source)
+    default:
+      if (def.cardType == 'continuous') {
+        let s = removeFromHand(ctx.state, ctx.controllerId, ctx.source.instanceId)
+        return addToField(s, ctx.controllerId, ctx.source)
+      }
+      if (def.cardType == 'attack') {
+        return openAttackResponse(ctx.state, ctx.controllerId, ctx.source)
+      }
+      return ctx.state
+  }
+}
+
+function openAttackResponse(state : GameState, attackerId : PlayerId, card : CardInstance) : GameState {
+  const targetId = opponentId(state, attackerId)
+  return {
+    ...state,
+    phase: 'response',
+    responseWindow: {
+      reason: 'attack',
+      attackerId,
+      targetId,
+      attackCardInstanceId: card.instanceId,
+      responders: [targetId, attackerId],
+      passed: []
+    },
+    stack: [{
+      id: `stk_${state.tick}`,
+      sourceInstanceId: card.instanceId,
+      controllerId: attackerId,
+      kind: 'attack',
+      handlerId: getCardDef(card.defId)?.id ?? 'attack',
+      resolved: false
+    }]
+  }
+}
+
+export function resolveGuard(state : GameState, playerId : PlayerId, guardCard : CardInstance) : GameState {
+  const win = state.responseWindow
+  if (win == null || win.reason != 'attack') return state
+  if (playerId != win.targetId) return state
+
+  let next = removeFromHand(state, playerId, guardCard.instanceId)
+  next = discardCard(next, guardCard)
+
+  const attackInst = findInstance(next, win.attackCardInstanceId)
+  if (attackInst != null) {
+    next = placeOnOpponentField(next, win.attackerId, win.attackerId, attackInst)
+  }
+
+  next = drawFromPile(next, playerId, 'royal')
+  next = {
+    ...next,
+    responseWindow: null,
+    phase: 'main',
+    stack: next.stack.map((s) => ({ ...s, resolved: true })),
+    events: [...next.events, { tick: next.tick, type: 'guard', message: '卫兵无效化攻击' }]
+  }
+  return next
+}
+
+function resolveWitch(state : GameState, playerId : PlayerId, witch : CardInstance) : GameState {
+  const win = state.responseWindow
+  if (win == null) return state
+  const attacker = getPlayer(state, win.attackerId)
+  if (attacker == null || attacker.field.length == 0) return state
+  let next = removeFromHand(state, playerId, witch.instanceId)
+  next = discardCard(next, witch)
+  const target = attacker.field[0]
+  const players = next.players.map((p) => {
+    if (p.id != win.attackerId) return p
+    return {
+      ...p,
+      field: p.field.map((c) =>
+        c.instanceId == target.instanceId ? { ...c, faceDown: true, tapped: true } : c
+      )
+    }
+  })
+  next = { ...next, players, responseWindow: null, phase: 'main' }
+  return next
+}
+
+function returnAllOpponentContinuous(state : GameState, controllerId : PlayerId) : GameState {
+  const oppId = opponentId(state, controllerId)
+  const players = state.players.map((p) => {
+    if (p.id != oppId) return p
+    const continuous = p.field.filter((c) => {
+      const d = getCardDef(c.defId)
+      return d != null && d.cardType == 'continuous'
+    })
+    const rest = p.field.filter((c) => {
+      const d = getCardDef(c.defId)
+      return d == null || d.cardType != 'continuous'
+    })
+    return { ...p, field: rest, hand: [...p.hand, ...continuous] }
+  })
+  return { ...state, players }
+}
+
+function untapAllOpponentContinuous(state : GameState, controllerId : PlayerId) : GameState {
+  const oppId = opponentId(state, controllerId)
+  const players = state.players.map((p) => {
+    if (p.id != oppId) return p
+    return { ...p, field: p.field.map((c) => ({ ...c, tapped: false })) }
+  })
+  return { ...state, players }
+}
+
+function resolveMerchant(state : GameState, controllerId : PlayerId) : GameState {
+  const me = getPlayer(state, controllerId)
+  const opp = getPlayer(state, opponentId(state, controllerId))
+  if (me == null || opp == null) return state
+  if (opp.gold <= me.gold) return state
+  if (opp.gold <= 0) return state
+  const players = state.players.map((p) => {
+    if (p.id == opp.id) return { ...p, gold: p.gold - 1 }
+    if (p.id == me.id) return { ...p, gold: p.gold + 1 }
+    return p
+  })
+  return { ...state, players }
+}
+
+function startDeclareName(state : GameState, controllerId : PlayerId, source : CardInstance) : GameState {
+  return {
+    ...state,
+    pendingChoice: { type: 'declareName', playerId: controllerId, names: [] }
+  }
+}
+
+function startPlaceMonsterHand(state : GameState, controllerId : PlayerId, source : CardInstance, level : number) : GameState {
+  const oppId = opponentId(state, controllerId)
+  const opp = getPlayer(state, oppId)
+  if (opp == null) return state
+  const monsters = opp.hand.filter((c) => {
+    const d = getCardDef(c.defId)
+    return d != null && d.faction == 'monster'
+  })
+  if (monsters.length == 0) return state
+  return {
+    ...state,
+    pendingChoice: { type: 'pickHand', playerId: controllerId, count: 1, filter: 'monster' }
+  }
+}
+
+function resolveZenglu(state : GameState, controllerId : PlayerId, source : CardInstance) : GameState {
+  const candidates = state.royalDiscard.filter((c) => {
+    const d = getCardDef(c.defId)
+    return d != null && d.level > 1
+  })
+  if (candidates.length == 0) return state
+  const picked = candidates[candidates.length - 1]
+  const royalDiscard = state.royalDiscard.filter((c) => c.instanceId != picked.instanceId)
+  const players = state.players.map((p) => {
+    if (p.id != controllerId) return p
+    return { ...p, hand: [...p.hand, { ...picked, ownerId: controllerId }] }
+  })
+  return { ...state, royalDiscard, players }
+}
+
+export function applyResolvedAttack(state : GameState, controllerId : PlayerId, inst : CardInstance) : GameState {
+  const def = getCardDef(inst.defId)
+  if (def == null) return discardCard(state, inst)
+  switch (def.id) {
+    case 'hero_lv4':
+      return startPlaceMonsterHand(state, controllerId, inst, 4)
+    case 'hero_lv5':
+      return startPlaceMonsterHand(state, controllerId, inst, 5)
+    case 'goblin':
+      return startDeclareName(state, controllerId, inst)
+    case 'merchant':
+      return discardCard(resolveMerchant(state, controllerId), inst)
+    case 'white_bone':
+      return discardCard(returnAllOpponentContinuous(state, controllerId), inst)
+    case 'dragon_flame':
+      return discardCard(untapAllOpponentContinuous(state, controllerId), inst)
+    case 'slime':
+      return takeGoldFromPool(state, controllerId, 1)
+    default:
+      return discardCard(state, inst)
+  }
+}
+
+export function canPlayCard(state : GameState, playerId : PlayerId, instanceId : string) : boolean {
+  if (state.phase == 'gameover') return false
+  const inst = findInstance(state, instanceId)
+  if (inst == null) return false
+  const def = getCardDef(inst.defId)
+  if (def == null) return false
+
+  if (state.responseWindow != null) {
+    return def.cardType == 'trigger' && playerId == state.responseWindow.targetId
+  }
+
+  if (state.phase != 'main' || state.activePlayerId != playerId) {
+    return def.cardType == 'trigger'
+  }
+
+  if (def.cardType == 'attack' && state.actionPoints <= 0) return false
+  if (!def.freeAction && def.cardType != 'trigger' && state.actionPoints <= 0) return false
+  if (def.id == 'slime' && state.flags.slimePlayedThisTurn) return false
+  if (def.id == 'fire_dragon') {
+    const me = getPlayer(state, playerId)
+    if (me == null) return false
+    const hasEgg = me.field.some((c) => c.defId == 'dragon_egg')
+    if (!hasEgg) return false
+  }
+  return true
+}

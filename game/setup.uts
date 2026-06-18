@@ -1,0 +1,178 @@
+import type { GameState, PlayerState } from './types.uts'
+import {
+  HUMAN_PLAYER_ID, AI_PLAYER_ID, TOTAL_GOLD_POOL, INITIAL_HAND, MAIN_ACTION_POINTS
+} from './types.uts'
+import { SeededRng } from './rng.uts'
+import {
+  getRoyalBaseDefs, getMonsterBaseDefs, getRoyalExIds, getMonsterExIds,
+  getCopyCount, getCardDef
+} from './cards/catalog.uts'
+import { resetInstanceCounter, createInstance } from './cards/instance.uts'
+
+export type CreateGameOptions = {
+  playerCount : number
+  humanFirst ?: boolean
+}
+
+export function buildDeckIds(faction : 'royal' | 'monster', playerCount : number, exId : string | null) : string[] {
+  const baseDefs = faction == 'royal' ? getRoyalBaseDefs() : getMonsterBaseDefs()
+  const ids : string[] = []
+  for (let i = 0; i < baseDefs.length; i++) {
+    const def = baseDefs[i]
+    const count = getCopyCount(def, playerCount)
+    for (let c = 0; c < count; c++) {
+      ids.push(def.id)
+    }
+  }
+  if (exId != null) {
+    ids.push(exId)
+  }
+  return ids
+}
+
+export function createGame(seed : number, options : CreateGameOptions) : GameState {
+  resetInstanceCounter()
+  const rng = new SeededRng(seed)
+  const royalExPool = getRoyalExIds()
+  const monsterExPool = getMonsterExIds()
+  const royalEx = rng.pickOne(royalExPool)!
+  const monsterEx = rng.pickOne(monsterExPool)!
+
+  const removedEx : string[] = []
+  for (let i = 0; i < royalExPool.length; i++) {
+    if (royalExPool[i] != royalEx) removedEx.push(royalExPool[i])
+  }
+  for (let i = 0; i < monsterExPool.length; i++) {
+    if (monsterExPool[i] != monsterEx) removedEx.push(monsterExPool[i])
+  }
+
+  let royalDeck = rng.shuffle(buildDeckIds('royal', options.playerCount, royalEx))
+  let monsterDeck = rng.shuffle(buildDeckIds('monster', options.playerCount, monsterEx))
+
+  const humanFirst = options.humanFirst ?? rng.nextInt(2) == 0
+  const firstPlayerId = humanFirst ? HUMAN_PLAYER_ID : AI_PLAYER_ID
+
+  const players : PlayerState[] = [
+    { id: HUMAN_PLAYER_ID, name: '玩家', isHuman: true, gold: 0, hand: [], field: [] },
+    { id: AI_PLAYER_ID, name: 'AI', isHuman: false, gold: 0, hand: [], field: [] }
+  ]
+
+  for (let p = 0; p < players.length; p++) {
+    for (let h = 0; h < INITIAL_HAND; h++) {
+      const useRoyal = rng.nextInt(2) == 0
+      if (useRoyal && royalDeck.length > 0) {
+        const defId = royalDeck.shift()!
+        players[p].hand.push(createInstance(defId, players[p].id))
+      } else if (monsterDeck.length > 0) {
+        const defId = monsterDeck.shift()!
+        players[p].hand.push(createInstance(defId, players[p].id))
+      } else if (royalDeck.length > 0) {
+        const defId = royalDeck.shift()!
+        players[p].hand.push(createInstance(defId, players[p].id))
+      }
+    }
+  }
+
+  return {
+    seed,
+    tick: 0,
+    turn: 1,
+    phase: 'main',
+    activePlayerId: firstPlayerId,
+    actionPoints: MAIN_ACTION_POINTS,
+    goldPool: TOTAL_GOLD_POOL,
+    players,
+    royalDeck,
+    monsterDeck,
+    royalDiscard: [],
+    monsterDiscard: [],
+    removedEx,
+    stack: [],
+    responseWindow: null,
+    pendingChoice: null,
+    winnerId: null,
+    isDraw: false,
+    events: [{ tick: 0, type: 'game_start', message: '对局开始' }],
+    flags: { slimePlayedThisTurn: false, holyGrailOnField: false }
+  }
+}
+
+export function drawFromPile(state : GameState, playerId : string, pile : 'royal' | 'monster') : GameState {
+  const deck = pile == 'royal' ? state.royalDeck : state.monsterDeck
+  if (deck.length == 0) {
+    return state
+  }
+  const defId = deck[0]
+  const newDeck = deck.slice(1)
+  const card = createInstance(defId, playerId)
+  const players = state.players.map((p) => {
+    if (p.id != playerId) return p
+    return { ...p, hand: [...p.hand, card] }
+  })
+  return {
+    ...state,
+    tick: state.tick + 1,
+    players,
+    royalDeck: pile == 'royal' ? newDeck : state.royalDeck,
+    monsterDeck: pile == 'monster' ? newDeck : state.monsterDeck,
+    events: [...state.events, { tick: state.tick + 1, type: 'draw', message: `${playerId} 抽牌` }]
+  }
+}
+
+export function takeGoldFromPool(state : GameState, playerId : string, amount : number) : GameState {
+  if (amount <= 0 || state.goldPool < amount) return state
+  const players = state.players.map((p) => {
+    if (p.id != playerId) return p
+    return { ...p, gold: p.gold + amount }
+  })
+  return {
+    ...state,
+    goldPool: state.goldPool - amount,
+    players,
+    events: [...state.events, { tick: state.tick, type: 'gain_gold', message: `${playerId} +${amount} 金` }]
+  }
+}
+
+export function discardCard(state : GameState, instance : import('./types.uts').CardInstance) : GameState {
+  const def = getCardDef(instance.defId)
+  const faction = def != null ? def.faction : 'royal'
+  const royalDiscard = faction == 'royal' ? [...state.royalDiscard, instance] : state.royalDiscard
+  const monsterDiscard = faction == 'monster' ? [...state.monsterDiscard, instance] : state.monsterDiscard
+  const players = state.players.map((p) => ({
+    ...p,
+    hand: p.hand.filter((c) => c.instanceId != instance.instanceId),
+    field: p.field.filter((c) => c.instanceId != instance.instanceId)
+  }))
+  return { ...state, players, royalDiscard, monsterDiscard }
+}
+
+export function removeFromHand(state : GameState, playerId : string, instanceId : string) : GameState {
+  const players = state.players.map((p) => {
+    if (p.id != playerId) return p
+    return { ...p, hand: p.hand.filter((c) => c.instanceId != instanceId) }
+  })
+  return { ...state, players }
+}
+
+export function addToField(state : GameState, playerId : string, instance : import('./types.uts').CardInstance) : GameState {
+  const tapped = { ...instance, tapped: true }
+  const players = state.players.map((p) => {
+    if (p.id != playerId) return p
+    return { ...p, field: [...p.field, tapped] }
+  })
+  return { ...state, players }
+}
+
+export function placeOnOpponentField(state : GameState, ownerId : string, targetPlayerId : string, instance : import('./types.uts').CardInstance) : GameState {
+  const placed = { ...instance, ownerId: targetPlayerId, tapped: true }
+  const players = state.players.map((p) => {
+    if (p.id == ownerId) {
+      return { ...p, hand: p.hand.filter((c) => c.instanceId != instance.instanceId) }
+    }
+    if (p.id == targetPlayerId) {
+      return { ...p, field: [...p.field, placed] }
+    }
+    return p
+  })
+  return { ...state, players }
+}

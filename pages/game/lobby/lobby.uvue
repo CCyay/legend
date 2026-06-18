@@ -1,0 +1,55 @@
+<template>
+  <view class="lobby">
+    <text class="title">Legend 双人卡牌</text>
+    <text class="subtitle">皇室 vs 魔物 · 人机对战</text>
+    <view class="rules">
+      <text class="rule-line">胜利：先获得 5 枚金币，或牌库抽空后金币最多</text>
+      <text class="rule-line">每回合 2 行动点：抽牌或出牌</text>
+      <text class="rule-line">触发卡可在被攻击时打出</text>
+    </view>
+    <button class="start-btn" type="primary" @click="onStart">开始游戏</button>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { startNewGame } from '@/store/game.uts'
+
+function onStart() {
+  startNewGame(Date.now())
+  uni.navigateTo({ url: '/pages/game/match/match' })
+}
+</script>
+
+<style>
+.lobby {
+  flex: 1;
+  padding: 40px 24px;
+  align-items: center;
+}
+.title {
+  font-size: 28px;
+  font-weight: bold;
+  color: #1a1a2e;
+  margin-bottom: 8px;
+}
+.subtitle {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 32px;
+}
+.rules {
+  width: 100%;
+  background-color: #f5f5f5;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 40px;
+}
+.rule-line {
+  font-size: 14px;
+  color: #444;
+  line-height: 24px;
+}
+.start-btn {
+  width: 80%;
+}
+</style>

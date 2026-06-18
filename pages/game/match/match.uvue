@@ -1,0 +1,372 @@
+<template>
+  <view v-if="game == null" class="empty">
+    <text>未找到对局，请返回大厅</text>
+    <button @click="goLobby">返回大厅</button>
+  </view>
+  <view v-else class="match-layout">
+    <!-- 上方：AI -->
+    <view class="player ai" :class="{ 'player--active': isAiActive }">
+      <view class="player-meta">
+        <text class="pname">{{ ai?.name }}</text>
+        <text class="meta-item">{{ ai?.gold ?? 0 }} 金</text>
+        <text class="meta-item">手牌 {{ ai?.hand.length ?? 0 }}</text>
+        <text class="meta-item meta-highlight">{{ aiStatusText }}</text>
+      </view>
+      <text class="hand-label">手牌</text>
+      <scroll-view class="hand-scroll hand-scroll--ai" scroll-x="true" :show-scrollbar="true">
+        <view class="hand-track" :style="{ width: aiHandTrackWidth }">
+          <card-back
+            v-for="card in ai?.hand"
+            :key="card.instanceId"
+            :def-id="card.defId" />
+          <text v-if="(ai?.hand.length ?? 0) == 0" class="field-empty">无</text>
+        </view>
+      </scroll-view>
+      <text class="field-label">场上</text>
+      <scroll-view class="field-scroll" scroll-x="true" :show-scrollbar="true">
+        <view class="field-track" :style="{ width: aiFieldTrackWidth }">
+          <card-face
+            v-for="card in ai?.field"
+            :key="card.instanceId"
+            :def-id="card.defId"
+            :compact="true" />
+          <text v-if="(ai?.field.length ?? 0) == 0" class="field-empty">无</text>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- 中间：操作区 -->
+    <view class="action-center">
+      <view v-if="lastError != ''" class="error">
+        <text>{{ lastError }}</text>
+      </view>
+      <text class="pool-label">公共金币池 {{ game!.goldPool }}</text>
+      <view v-if="game!.responseWindow != null" class="response-box">
+        <text>响应窗口：可打出触发卡</text>
+        <button size="mini" @click="passResponse">跳过响应</button>
+      </view>
+      <view v-if="game!.phase == 'gameover'" class="gameover">
+        <text v-if="game!.isDraw">和局！</text>
+        <text v-else-if="game!.winnerId == human?.id">你赢了！</text>
+        <text v-else>AI 获胜</text>
+        <button @click="goLobby">返回大厅</button>
+      </view>
+      <view v-else class="actions">
+        <button size="mini" :disabled="!canDrawRoyal" @click="drawRoyal">抽皇室</button>
+        <button size="mini" :disabled="!canDrawMonster" @click="drawMonster">抽魔物</button>
+        <button size="mini" type="warn" :disabled="!canEndPhase" @click="endPhase">结束阶段</button>
+      </view>
+    </view>
+
+    <!-- 下方：玩家（场上在上，手牌在下） -->
+    <view class="player human" :class="{ 'player--active': isHumanActive }">
+      <view class="player-meta">
+        <text class="pname">{{ human?.name }} (你)</text>
+        <text class="meta-item">{{ human?.gold ?? 0 }} 金</text>
+        <text class="meta-item">手牌 {{ human?.hand.length ?? 0 }}</text>
+        <text class="meta-item meta-highlight">{{ humanStatusText }}</text>
+      </view>
+      <view class="human-body">
+        <view class="human-field-block">
+          <text class="field-label">场上</text>
+          <scroll-view class="field-scroll" scroll-x="true" :show-scrollbar="true">
+            <view class="field-track" :style="{ width: humanFieldTrackWidth }">
+              <card-face
+                v-for="card in human?.field"
+                :key="card.instanceId"
+                :def-id="card.defId"
+                :compact="true" />
+              <text v-if="(human?.field.length ?? 0) == 0" class="field-empty">无</text>
+            </view>
+          </scroll-view>
+        </view>
+        <view class="human-hand-block">
+          <text class="hand-label">手牌</text>
+          <scroll-view class="hand-scroll hand-scroll--human" scroll-x="true" :show-scrollbar="true">
+            <view class="hand-track" :style="{ width: humanHandTrackWidth }">
+              <card-face
+                v-for="card in human?.hand"
+                :key="card.instanceId"
+                :def-id="card.defId"
+                hand-mode
+                @click="onPlayCard(card.instanceId)" />
+            </view>
+          </scroll-view>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { computed, onMounted } from 'vue'
+import { gameState, sendIntent, getHumanPlayer, getAiPlayer, startNewGame } from '@/store/game.uts'
+import { HUMAN_PLAYER_ID, AI_PLAYER_ID } from '@/game/types.uts'
+import { pickAiTurn } from '@/game/ai/opponent.uts'
+import CardFace from '@/components/game/card-face.uvue'
+import CardBack from '@/components/game/card-back.uvue'
+
+const game = computed(() => gameState.game)
+const human = computed(() => getHumanPlayer())
+const ai = computed(() => getAiPlayer())
+const lastError = computed(() => gameState.lastError)
+
+const isHumanActive = computed(() => {
+  const g = gameState.game
+  return g != null && g.activePlayerId == HUMAN_PLAYER_ID && g.phase != 'gameover'
+})
+
+const isAiActive = computed(() => {
+  const g = gameState.game
+  return g != null && g.activePlayerId == AI_PLAYER_ID && g.phase != 'gameover'
+})
+
+function phaseLabel(phase : string) : string {
+  const map : UTSJSONObject = {
+    prep: '准备阶段',
+    main: '主要阶段',
+    end: '结束阶段',
+    response: '响应窗口',
+    gameover: '已结束'
+  }
+  return map[phase] as string ?? phase
+}
+
+function buildPlayerStatus(playerId : string, isActive : boolean) : string {
+  const g = gameState.game
+  if (g == null || !isActive) return '等待中'
+  if (g.phase == 'main') return `行动点 ${g.actionPoints}`
+  return phaseLabel(g.phase)
+}
+
+const humanStatusText = computed(() => buildPlayerStatus(HUMAN_PLAYER_ID, isHumanActive.value))
+const aiStatusText = computed(() => buildPlayerStatus(AI_PLAYER_ID, isAiActive.value))
+
+function trackWidthPx(itemWidth : number, count : number) : string {
+  if (count <= 0) return '100%'
+  return `${count * itemWidth + 16}px`
+}
+
+const humanHandTrackWidth = computed(() => trackWidthPx(144, human.value?.hand.length ?? 0))
+const aiHandTrackWidth = computed(() => trackWidthPx(60, ai.value?.hand.length ?? 0))
+const humanFieldTrackWidth = computed(() => trackWidthPx(148, human.value?.field.length ?? 0))
+const aiFieldTrackWidth = computed(() => trackWidthPx(148, ai.value?.field.length ?? 0))
+
+const canDrawRoyal = computed(() => {
+  const g = gameState.game
+  if (g == null) return false
+  return g.activePlayerId == HUMAN_PLAYER_ID && g.phase == 'main' && g.responseWindow == null
+    && g.actionPoints > 0 && g.royalDeck.length > 0
+})
+
+const canDrawMonster = computed(() => {
+  const g = gameState.game
+  if (g == null) return false
+  return g.activePlayerId == HUMAN_PLAYER_ID && g.phase == 'main' && g.responseWindow == null
+    && g.actionPoints > 0 && g.monsterDeck.length > 0
+})
+
+const canEndPhase = computed(() => {
+  const g = gameState.game
+  if (g == null) return false
+  return g.activePlayerId == HUMAN_PLAYER_ID && (g.phase == 'main' || g.phase == 'end')
+})
+
+function onPlayCard(instanceId : string) {
+  if (gameState.game == null) return
+  sendIntent({
+    type: 'playCard',
+    playerId: HUMAN_PLAYER_ID,
+    instanceId
+  })
+  runAiIfNeeded()
+}
+
+function drawRoyal() {
+  sendIntent({ type: 'draw', playerId: HUMAN_PLAYER_ID, pile: 'royal' })
+  runAiIfNeeded()
+}
+
+function drawMonster() {
+  sendIntent({ type: 'draw', playerId: HUMAN_PLAYER_ID, pile: 'monster' })
+  runAiIfNeeded()
+}
+
+function endPhase() {
+  sendIntent({ type: 'endPhase', playerId: HUMAN_PLAYER_ID })
+  runAiIfNeeded()
+}
+
+function passResponse() {
+  sendIntent({ type: 'passResponse', playerId: HUMAN_PLAYER_ID })
+  runAiIfNeeded()
+}
+
+function runAiIfNeeded() {
+  if (gameState.game == null || gameState.game.phase == 'gameover') return
+  const intents = pickAiTurn(gameState.game)
+  for (let i = 0; i < intents.length; i++) {
+    sendIntent(intents[i])
+  }
+}
+
+function goLobby() {
+  uni.reLaunch({ url: '/pages/game/lobby/lobby' })
+}
+
+onMounted(() => {
+  if (gameState.game == null) {
+    startNewGame(Date.now())
+  }
+  runAiIfNeeded()
+})
+
+defineExpose({ goLobby, drawRoyal, endPhase })
+</script>
+
+<style>
+.match-layout {
+  flex: 1;
+  flex-direction: column;
+  padding: 10px;
+  background-color: #f0f2f5;
+  min-height: 0;
+}
+.player {
+  padding: 12px;
+  border-radius: 12px;
+  background-color: #fff;
+  border-width: 2px;
+  border-style: solid;
+  flex-shrink: 0;
+}
+.player--active {
+  border-color: #2196f3;
+}
+.ai {
+  border-color: #9b59b6;
+  margin-bottom: 8px;
+}
+.human {
+  border-color: #ffc107;
+  margin-top: 8px;
+  flex-direction: column;
+}
+.human-body {
+  flex-direction: column;
+}
+.human-field-block {
+  margin-bottom: 10px;
+}
+.human-hand-block {
+  padding-top: 8px;
+  border-top-width: 1px;
+  border-top-style: dashed;
+  border-top-color: #e0e0e0;
+}
+.player-meta {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.pname {
+  font-size: 15px;
+  font-weight: bold;
+  margin-right: 10px;
+}
+.meta-item {
+  font-size: 13px;
+  color: #555;
+  margin-right: 10px;
+}
+.meta-highlight {
+  color: #1565c0;
+  font-weight: bold;
+}
+.action-center {
+  padding: 12px;
+  margin: 4px 0;
+  border-radius: 12px;
+  background-color: #fff;
+  align-items: center;
+  border-width: 1px;
+  border-color: #e0e0e0;
+  border-style: solid;
+  flex-shrink: 0;
+}
+.pool-label {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 10px;
+}
+.actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.actions button {
+  margin: 4px 6px;
+}
+.error {
+  background-color: #ffe0e0;
+  padding: 8px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  width: 100%;
+}
+.response-box {
+  background-color: #d4edff;
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  align-items: center;
+  width: 100%;
+}
+.gameover {
+  align-items: center;
+  padding: 12px;
+  background-color: #e8f5e9;
+  border-radius: 8px;
+  width: 100%;
+}
+.hand-label, .field-label {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 4px;
+}
+.hand-scroll {
+  width: 100%;
+}
+.hand-scroll--human {
+  height: 196px;
+}
+.hand-scroll--ai {
+  height: 92px;
+}
+.field-scroll {
+  width: 100%;
+  height: 120px;
+}
+.hand-track, .field-track {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  height: 100%;
+  padding-right: 16px;
+}
+.hand-track {
+  min-width: 100%;
+}
+.field-empty {
+  font-size: 12px;
+  color: #aaa;
+  padding: 8px;
+}
+.empty {
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+</style>
