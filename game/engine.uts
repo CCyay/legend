@@ -1,9 +1,9 @@
-import type { GameState, Intent, DispatchResult, PlayerId } from './types.uts'
+import type { GameState, Intent, DispatchResult, PlayerId, DrawPile } from './types.uts'
+import { HUMAN_PLAYER_ID, AI_PLAYER_ID, INITIAL_HAND, MAIN_ACTION_POINTS } from './types.uts'
 import { getCardDef } from './cards/catalog.uts'
 import { findInstance, getPlayer } from './cards/instance.uts'
-import { createGame } from './setup.uts'
-import { drawFromPile, discardCard } from './setup.uts'
-import { enterEndPhase, spendActionPoint, finishEndPhase, startPrepPhase } from './phases.uts'
+import { createGame, drawFromPile, discardCard } from './setup.uts'
+import { enterEndPhase, spendActionPoint, finishEndPhase, enterMainPhase } from './phases.uts'
 import { applyWinCheck } from './win.uts'
 import { canPlayCard, resolveCardOnPlay, resolveGuard, applyResolvedAttack } from './effects/handlers/index.uts'
 
@@ -13,6 +13,8 @@ export function dispatch(state : GameState, intent : Intent) : DispatchResult {
   }
 
   switch (intent.type) {
+    case 'pickOpeningHand':
+      return handlePickOpeningHand(state, intent.playerId, intent.pile)
     case 'draw':
       return handleDraw(state, intent.playerId, intent.pile)
     case 'playCard':
@@ -26,6 +28,61 @@ export function dispatch(state : GameState, intent : Intent) : DispatchResult {
     default:
       return { state, ok: false, error: '未知意图' }
   }
+}
+
+function handlePickOpeningHand(
+  state : GameState,
+  playerId : PlayerId,
+  pile : DrawPile
+) : DispatchResult {
+  if (state.phase != 'opening_hand') {
+    return { state, ok: false, error: '当前不在起手选牌阶段' }
+  }
+  const choice = state.pendingChoice
+  if (choice == null || choice.type != 'openingHand') {
+    return { state, ok: false, error: '无起手选牌请求' }
+  }
+  if (choice.playerId != playerId) {
+    return { state, ok: false, error: '未轮到你选牌' }
+  }
+  if (choice.remaining <= 0) {
+    return { state, ok: false, error: '已选满起手牌' }
+  }
+
+  const deck = pile == 'royal' ? state.royalDeck : state.monsterDeck
+  if (deck.length == 0) {
+    return { state, ok: false, error: '该牌库已空' }
+  }
+
+  let next = drawFromPile(state, playerId, pile)
+  const remaining = choice.remaining - 1
+
+  if (remaining > 0) {
+    next = {
+      ...next,
+      pendingChoice: { type: 'openingHand', playerId, remaining }
+    }
+    return { state: next, ok: true }
+  }
+
+  if (playerId == HUMAN_PLAYER_ID) {
+    next = {
+      ...next,
+      activePlayerId: AI_PLAYER_ID,
+      pendingChoice: { type: 'openingHand', playerId: AI_PLAYER_ID, remaining: INITIAL_HAND }
+    }
+    return { state: next, ok: true }
+  }
+
+  next = {
+    ...next,
+    phase: 'main',
+    activePlayerId: state.firstPlayerId,
+    actionPoints: MAIN_ACTION_POINTS,
+    pendingChoice: null,
+    events: [...next.events, { tick: next.tick, type: 'opening_done', message: '对局开始' }]
+  }
+  return { state: next, ok: true }
 }
 
 function handleDraw(state : GameState, playerId : PlayerId, pile : 'royal' | 'monster') : DispatchResult {

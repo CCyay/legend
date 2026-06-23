@@ -1,7 +1,31 @@
 import { validateCatalog, NAMED_CARD_IDS, getCardDef } from './cards/catalog.uts'
 import { createGame } from './setup.uts'
 import { dispatch } from './engine.uts'
-import { HUMAN_PLAYER_ID } from './types.uts'
+import { HUMAN_PLAYER_ID, AI_PLAYER_ID, INITIAL_HAND } from './types.uts'
+import type { GameState, DrawPile } from './types.uts'
+
+function autoPickOne(state : GameState, playerId : string) : GameState {
+  const pile : DrawPile = state.royalDeck.length > 0 ? 'royal' : 'monster'
+  const deck = pile == 'royal' ? state.royalDeck : state.monsterDeck
+  if (deck.length == 0) return state
+  const result = dispatch(state, {
+    type: 'pickOpeningHand',
+    playerId,
+    pile
+  })
+  return result.state
+}
+
+export function completeOpeningHand(state : GameState) : GameState {
+  let next = state
+  for (let i = 0; i < INITIAL_HAND; i++) {
+    next = autoPickOne(next, HUMAN_PLAYER_ID)
+  }
+  for (let i = 0; i < INITIAL_HAND; i++) {
+    next = autoPickOne(next, AI_PLAYER_ID)
+  }
+  return next
+}
 
 export function runCatalogTests() : string[] {
   const errors : string[] = []
@@ -29,14 +53,20 @@ export function runCatalogTests() : string[] {
 
 export function runSetupTests() : string[] {
   const errors : string[] = []
-  const state = createGame(42, { playerCount: 2, humanFirst: true })
+  const created = createGame(42, { playerCount: 2, humanFirst: true })
 
-  if (state.turn != 1) errors.push('turn should be 1')
-  if (state.phase != 'main') errors.push('first turn should skip prep -> main')
-  if (state.goldPool != 21) errors.push('gold pool should be 21')
+  if (created.turn != 1) errors.push('turn should be 1')
+  if (created.phase != 'opening_hand') errors.push('should start in opening_hand')
+  if (created.players[0].hand.length != 0) errors.push('p0 should have empty hand before pick')
+  if (created.players[1].hand.length != 0) errors.push('p1 should have empty hand before pick')
+  if (created.removedEx.length != 5) errors.push('should remove 5 EX cards in 2p')
+
+  const state = completeOpeningHand(created)
+
+  if (state.phase != 'main') errors.push('after opening picks should be main')
   if (state.players[0].hand.length != 3) errors.push('p0 should have 3 cards')
   if (state.players[1].hand.length != 3) errors.push('p1 should have 3 cards')
-  if (state.removedEx.length != 5) errors.push('should remove 5 EX cards in 2p')
+  if (state.activePlayerId != state.firstPlayerId) errors.push('active should be first player')
 
   let royalBlacksmith = 0
   for (let i = 0; i < state.royalDeck.length; i++) {
@@ -51,7 +81,7 @@ export function runSetupTests() : string[] {
   if (royalFighter != 3) errors.push(`fighter count ${royalFighter} != 3`)
 
   const state2 = createGame(42, { playerCount: 2, humanFirst: true })
-  if (state.royalDeck.join(',') != state2.royalDeck.join(',')) {
+  if (created.royalDeck.join(',') != state2.royalDeck.join(',')) {
     errors.push('same seed should produce same deck')
   }
 
@@ -60,7 +90,7 @@ export function runSetupTests() : string[] {
 
 export function runEngineSmoke() : string[] {
   const errors : string[] = []
-  let state = createGame(100, { playerCount: 2, humanFirst: true })
+  let state = completeOpeningHand(createGame(100, { playerCount: 2, humanFirst: true }))
 
   const draw = dispatch(state, { type: 'draw', playerId: HUMAN_PLAYER_ID, pile: 'royal' })
   if (!draw.ok) errors.push('draw should succeed')

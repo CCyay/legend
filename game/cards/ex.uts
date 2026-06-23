@@ -10,8 +10,6 @@ export const EX_CARDS : CardDef[] = [
     emblem: 'crown',
     copyCount: 1,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'holy_knight' }],
     tags: ['ex', 'buff_royal_lv', 'counter_monster_attack']
   },
@@ -24,8 +22,6 @@ export const EX_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 1,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'great_wizard' }],
     tags: ['ex', 'declare_level']
   },
@@ -38,8 +34,6 @@ export const EX_CARDS : CardDef[] = [
     emblem: 'demon',
     copyCount: 1,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: true,
     effects: [{ kind: 'custom', handlerId: 'demon_lord' }],
     tags: ['ex', 'draw_penalty']
   },
@@ -52,8 +46,6 @@ export const EX_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 1,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'treasure_monster' }],
     tags: ['ex', 'double_gold']
   },
@@ -66,8 +58,6 @@ export const EX_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 1,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'black_knight' }],
     tags: ['ex']
   },
@@ -80,8 +70,6 @@ export const EX_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 1,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'magic_sword' }],
     tags: ['ex', 'dual_faction', 'double_attack']
   }

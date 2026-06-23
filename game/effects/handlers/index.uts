@@ -4,7 +4,7 @@ import {
   opponentId, getPlayer, findInstance
 } from '../../cards/instance.uts'
 import {
-  drawFromPile, takeGoldFromPool, discardCard, addToField,
+  drawFromPile, gainGold, discardCard, addToField,
   removeFromHand, placeOnOpponentField
 } from '../../setup.uts'
 import { spendActionPoint } from '../../phases.uts'
@@ -21,7 +21,7 @@ export function resolveCardOnPlay(ctx : EffectContext) : GameState {
 
   switch (def.id) {
     case 'slime':
-      return discardCard(takeGoldFromPool(ctx.state, ctx.controllerId, 1), ctx.source)
+      return discardCard(gainGold(ctx.state, ctx.controllerId, 1), ctx.source)
     case 'goblin':
       return startDeclareName(ctx.state, ctx.controllerId, ctx.source)
     case 'hero_lv4':
@@ -238,7 +238,7 @@ export function applyResolvedAttack(state : GameState, controllerId : PlayerId, 
     case 'dragon_flame':
       return discardCard(untapAllOpponentContinuous(state, controllerId), inst)
     case 'slime':
-      return takeGoldFromPool(state, controllerId, 1)
+      return gainGold(state, controllerId, 1)
     default:
       return discardCard(state, inst)
   }

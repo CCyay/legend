@@ -1,13 +1,13 @@
 /**
  * 游戏引擎核心类型
  * Intent: 玩家/AI 提交的操作意图
- * Phase: Prep | Main | End | Response
+ * Phase: Prep | Main | End | Response | OpeningHand | Gameover
  */
 
 export type Faction = 'royal' | 'monster'
 export type CardType = 'attack' | 'trigger' | 'continuous'
 export type Emblem = 'none' | 'crown' | 'dragon' | 'demon'
-export type GamePhase = 'prep' | 'main' | 'end' | 'response' | 'gameover'
+export type GamePhase = 'opening_hand' | 'prep' | 'main' | 'end' | 'response' | 'gameover'
 export type DrawPile = 'royal' | 'monster'
 
 export type EffectKind =
@@ -38,8 +38,6 @@ export type CardDef = {
   copyCount : number
   twoPlayerCopyCount ?: number
   freeAction : boolean
-  royalFamily : boolean
-  priorityEmblem : boolean
   effects : EffectDef[]
   tags : string[]
 }
@@ -69,8 +67,8 @@ export type GameState = {
   turn : number
   phase : GamePhase
   activePlayerId : PlayerId
+  firstPlayerId : PlayerId
   actionPoints : number
-  goldPool : number
   players : PlayerState[]
   royalDeck : string[]
   monsterDeck : string[]
@@ -110,6 +108,7 @@ export type ResponseWindow = {
 }
 
 export type PendingChoice =
+  | { type : 'openingHand'; playerId : PlayerId; remaining : number }
   | { type : 'discard'; playerId : PlayerId; count : number; selected : string[] }
   | { type : 'pickHand'; playerId : PlayerId; count : number; filter ?: string }
   | { type : 'pickField'; playerId : PlayerId; targetPlayerId : PlayerId; count : number }
@@ -125,6 +124,7 @@ export type GameEvent = {
 }
 
 export type Intent =
+  | { type : 'pickOpeningHand'; playerId : PlayerId; pile : DrawPile }
   | { type : 'draw'; playerId : PlayerId; pile : DrawPile }
   | { type : 'playCard'; playerId : PlayerId; instanceId : string; targets ?: string[] }
   | { type : 'passResponse'; playerId : PlayerId }
@@ -145,4 +145,3 @@ export const WIN_GOLD = 5
 export const HAND_LIMIT = 4
 export const MAIN_ACTION_POINTS = 2
 export const INITIAL_HAND = 3
-export const TOTAL_GOLD_POOL = 21

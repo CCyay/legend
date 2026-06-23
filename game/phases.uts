@@ -2,7 +2,7 @@ import type { GameState } from './types.uts'
 import { MAIN_ACTION_POINTS } from './types.uts'
 import { getCardDef } from './cards/catalog.uts'
 import { opponentId, getPlayer } from './cards/instance.uts'
-import { takeGoldFromPool } from './setup.uts'
+import { gainGold } from './setup.uts'
 
 export function startPrepPhase(state : GameState) : GameState {
   const player = getPlayer(state, state.activePlayerId)
@@ -31,13 +31,13 @@ export function startPrepPhase(state : GameState) : GameState {
   next = { ...next, players }
 
   if (returnedCards.length >= 2) {
-    next = takeGoldFromPool(next, state.activePlayerId, 1)
+    next = gainGold(next, state.activePlayerId, 1)
   }
 
   for (let i = 0; i < returnedCards.length; i++) {
     const def = getCardDef(returnedCards[i].defId)
     if (def != null && def.id == 'princess') {
-      next = takeGoldFromPool(next, state.activePlayerId, 1)
+      next = gainGold(next, state.activePlayerId, 1)
     }
     if (def != null && def.id == 'holy_grail') {
       const p = getPlayer(next, state.activePlayerId)

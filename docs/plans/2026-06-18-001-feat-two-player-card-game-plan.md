@@ -24,15 +24,15 @@ status: ready
 
 ## Requirements
 
-- R1. **双人对局 Setup**：黄/紫牌库拆分洗牌；铁匠、格斗家各 3 张；每色牌库随机注入 1 张 EX 后其余 EX 移出；公共金币池 21 枚；双方各抽 3 张初始手牌（可混色）；随机先手，第一回合跳过准备阶段。
+- R1. **双人对局 Setup**：黄/紫牌库拆分洗牌；铁匠、格斗家各 3 张；每色牌库随机注入 1 张 EX 后其余 EX 移出；**无公共金币池**；双方各**自选牌库抽牌 3 次**组成起手（每次从皇室或魔物牌库顶抽 1 张，可混色）；随机先手，第一回合跳过准备阶段。
 - R2. **回合三阶段**：准备阶段（收回横置持续卡、≥2 张收回得 1 金币、准备阶段触发效果）→ 主要阶段（2 行动点，抽牌/出牌各耗 1 点）→ 结束阶段（手牌上限 4、场上持续卡竖置）。
 - R3. **卡牌三类**：攻击卡仅主要阶段对对手；触发卡任意时刻（含被攻击瞬间）；持续卡横置留场，仅自身准备阶段收回。
-- R4. **关键词与结算**：LV 0–6；国王/火龙/魔王优先级高于数字；放置 vs 弃置；宣言；纹章（皇冠/魔龙）；多效果顺序：被动持续先、主动后；史莱姆单回合限 1 张；龙蛋在场才能打火龙。
+- R4. **关键词与结算**：LV 0–6；放置 vs 弃置；宣言；纹章（皇冠/魔龙）；多效果顺序：被动持续先、主动后；史莱姆单回合限 1 张；龙蛋在场才能打火龙。
 - R5. **胜利条件**：任意玩家达到 5 金币即满足速胜条件（在效果栈清空后判定并结束对局）；或两色抽牌堆均空后比金币，平则比手牌数。
 - R6. **全部卡牌效果**：实现用户文档第五节（皇室）与第六节（魔物）所列全部基础卡与 EX 卡，含双阵营 EX 持续卡魔剑。
 - R7. **双人专属平衡**：魔王仅「双方每回合抽牌 -1」（无 4–5 人概率失效）；群体攻击仅作用于唯一对手；EX 各 1 张随机。
 - R8. **AI 对手**：AI 作为第二玩家，遵守相同规则；能完成主要阶段决策与触发卡响应；不偷看对手手牌。
-- R9. **移动端体验**：清晰展示阶段、行动点、金币、手牌、场上牌、分色弃牌堆；AI 回合有明确反馈；App 切后台可恢复对局。
+- R9. **移动端体验**：清晰展示阶段、行动点、个人金币、手牌、场上牌、分色弃牌堆、牌库剩余；起手选牌 UI；AI 回合有明确反馈；App 切后台可恢复对局。
 - R10. **可测试性**：规则引擎纯函数、确定性随机种子、Golden Scenario 覆盖关键交互。
 
 ---
@@ -43,7 +43,7 @@ status: ready
 - KTD2. **数据驱动效果 + 特化 Handler**：卡牌定义用判别联合 `Effect` AST；原子效果走 Registry；复杂卡（国王邻接判定、圣杯即时胜、火龙夺牌、五娘拦截等）用 `custom` handler，每张附 Golden Scenario。
 - KTD3. **简化 Priority 栈**：采用「响应窗口 + LIFO 栈」，非完整 MTG AP/NAP。攻击声明 → 双方可打触发卡 → 栈顶优先结算 → 被动持续先于主动。触发响应**不消耗行动点**；攻击已声明则行动点不退还。U4 完成前用 3 张代表卡（卫兵/勇者/女巫）做 spike，验证栈能否承载全部卡牌时序；不通过则升级为双玩家 priority pass。
 - KTD4. **确定性 RNG**：Setup 洗牌、EX 抽取、先后手均用 `SeededRng`；引擎内禁止 `Math.random()`，支持测试回放。
-- KTD5. **AI 架构**：`PublicView` + 规则脚本（致死线、必挡、高价值触发）+ Greedy 评估（金币差、场面控制、手牌质量）；Normal 难度首版目标；单步决策 < 2s。
+- KTD5. **AI 架构**：`PublicView` + 规则脚本（致死线、必挡、高价值触发）+ Greedy 评估（金币差、场面控制、手牌质量）；Normal 难度首版目标；单步决策 < 2s。起手 3 张由 AI 按公开牌库信息自选。
 - KTD6. **状态持久化**：`uni.setStorageSync` 序列化 `GameState`；`onAppHide` 写入、`onShow` 恢复；半完成选择（弃牌、宣言选牌）一并保存。
 - KTD7. **UI 技术栈**：组合式 `<script setup lang="uts">`；游戏状态经 `store/game.uts` reactive 包装；组件放 `components/game/`。
 - KTD8. **范围边界**：首版仅 2 人局（1 人 + AI）；不含 3–5 人、联机、Deck 构筑 UI（固定 Setup 规则生成牌库）。
@@ -84,8 +84,8 @@ flowchart TB
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Prep: turn >= 2
-  [*] --> Main: turn == 1 skip Prep
+  [*] --> OpeningHand: createGame
+  OpeningHand --> Main: 双方自选 3 张, turn=1 跳过 Prep
   Prep --> Main: prep resolved
   Main --> Response: attack declared OR trigger window
   Response --> Main: stack empty, AP remain
@@ -98,10 +98,11 @@ stateDiagram-v2
 
 ### 效果结算顺序（引擎 invariant）
 
-1. 状态检查（金币 ≥ 5、牌库空等）在**效果栈清空后**执行，不在链中途判胜。
+1. 状态检查（个人金币 ≥ 5、牌库空等）在**效果栈清空后**执行，不在链中途判胜。
 2. 同批触发：被动持续效果先于主动打出效果。
 3. 响应栈：LIFO；触发卡响应不耗 AP。
 4. 弃牌严格分色：黄→皇室弃牌堆，紫→魔物弃牌堆。
+5. **无公共金币池**：获得金币时直接增加玩家 `gold`，不从公共池扣减。
 
 ---
 
@@ -135,11 +136,12 @@ store/game.uts
 
 components/game/
 ├── phase-bar.uvue
-├── gold-display.uvue
+├── gold-display.uvue          # 玩家个人金币（非公共池）
 ├── card.uvue
 ├── hand-zone.uvue
 ├── field-zone.uvue
 ├── discard-pile.uvue
+├── opening-hand-picker.uvue   # 起手自选 3 张
 ├── action-bar.uvue
 ├── choice-modal.uvue
 └── game-log.uvue
@@ -168,7 +170,7 @@ game/__tests__/
 
 ## Scope Boundaries
 
-**In scope：** 全部卡牌、双人 Setup、完整回合、AI 对战、分色弃牌、两种胜利、App 生命周期存档、引擎单测与 Golden Scenario。
+**In scope：** 全部卡牌、双人 Setup（含起手自选）、完整回合、AI 对战、分色弃牌、两种胜利、App 生命周期存档、引擎单测与 Golden Scenario。
 
 **Out of scope：** 3–5 人局、联机/房间、人类双人对战热座（架构可扩展但首版不做）、Deck 构筑界面、卡牌动画/音效 polish、教程系统、排行榜。
 
@@ -186,6 +188,8 @@ game/__tests__/
 ## Assumptions
 
 - 响应窗口打触发卡不消耗行动点；攻击声明后 AP 不退还（即使被无效化）。
+- **无公共金币池**：数字版不实现实体桌游的 21 枚公共池；所有金币增减仅作用于玩家个人 `gold`。
+- **起手自选**：Setup 建库后，双方各**自选牌库抽牌 3 次**（每次选皇室或魔物牌库，从牌库顶抽 1 张，可混色）；人类在 UI 完成，AI 脚本完成；双方选满后开局。
 - 魔王「抽牌 -1」仅作用于准备阶段内的抽牌行为；第一回合无准备阶段故不生效。
 - 无法在需要时从空牌库抽牌即触发 deck-out 终局判定（效果栈清空后检查）。
 - 金币与手牌完全相同判和局。
@@ -249,7 +253,7 @@ U5/U6 可并行，但 U8 依赖 U5+U6 全卡完成后再集成。
 - `game/cards/ex.uts`
 - `game/__tests__/catalog.test.uts`
 
-**Approach：** `CardDef` 含 id、faction、cardType（attack/trigger/continuous）、level、emblem、effects[]。皇室 15+、魔物 15+、EX 与双阵营卡全部录入。国王/火龙/魔王标记 `priorityEmblem` 高于 LV。
+**Approach：** `CardDef` 含 id、faction、cardType（attack/trigger/continuous）、level、emblem、effects[]。皇室 15+、魔物 15+、EX 与双阵营卡全部录入。
 
 **Patterns to follow：** `store/index.uts` 的 `export type` + 强类型风格。
 
@@ -265,7 +269,7 @@ U5/U6 可并行，但 U8 依赖 U5+U6 全卡完成后再集成。
 
 ### U2. 双人局 Setup 与牌库管理
 
-**Goal：** 实现洗牌、分色牌库/弃牌堆、EX 随机注入、初始发牌、金币池、先后手。
+**Goal：** 实现洗牌、分色牌库/弃牌堆、EX 随机注入、起手自选 3 张、先后手。
 
 **Requirements：** R1, R7
 
@@ -277,14 +281,17 @@ U5/U6 可并行，但 U8 依赖 U5+U6 全卡完成后再集成。
 - `game/__tests__/setup.test.uts`
 - `game/__tests__/golden/two-player-setup.json`
 
-**Approach：** `createGame(seed, { playerCount: 2 })` 返回初始 `GameState`：双抽牌堆、空弃牌堆、pool 21 金、各 3 手牌、firstPlayer、turn=1、phase=Main。EX 从 exPool 各随机 1 张注入后移出其余 EX。
+**Approach：** `createGame(seed, { playerCount: 2 })` 返回初始 `GameState`：双抽牌堆、空弃牌堆、**无 `goldPool` 字段**、空手牌、`phase=OpeningHand`（或 `pendingChoice=OpeningHandPick`）。EX 从 exPool 各随机 1 张注入后移出其余 EX。双方通过 `pickOpeningHand` Intent 各自**选牌库抽牌 3 次**（仅指定 `pile`，从牌库顶抽取）；选满后 `firstPlayer` 开始 `turn=1`、`phase=Main`。
 
 **Test scenarios：**
 - 固定 seed 下 EX 注入结果可复现
 - 铁匠 3 张进入黄库，格斗家 3 张进入紫库
-- 初始手牌各 3 张，来源可黄可紫
+- 双方各自选 3 张后，手牌总数 6、对应牌库各减少 3 张
+- 自选可混色（例如 2 黄 1 紫）
+- 选牌未完成时不可进入 Main 阶段
 - 先手玩家第一回合 phase 为 Main（跳过 Prep）
 - 移出的 EX 不在任何牌库中
+- 获得金币时不检查、不扣减公共池
 
 **Verification：** Golden `two-player-setup.json` replay 一致。
 
@@ -366,7 +373,7 @@ U5/U6 可并行，但 U8 依赖 U5+U6 全卡完成后再集成。
 
 **Test scenarios（代表性，implementer 每张卡至少 1 条）：**
 - 公主：Main 打出不耗 AP；Prep +1 金
-- 国王：需邻接勇者/卫兵；每打 LV≥4 皇室 +1 金；场限 4 张皇室持续
+- 国王：需邻接勇者/卫兵；每打 LV≥4 皇室 +1 金
 - 圣杯：Prep 时差 1 金直接胜；全场唯一
 - 圣剑：自打勇者时改放置为弃置；可翻面火龙
 - 铁匠：1 AP 铺 2 手牌；同 LV/纹章 +1 金
@@ -482,17 +489,19 @@ U5/U6 可并行，但 U8 依赖 U5+U6 全卡完成后再集成。
 - `store/game.uts`
 - `pages/game/lobby/lobby.uvue`
 - `pages/game/match/match.uvue`
+- `components/game/opening-hand-picker.uvue`
 - `components/game/*.uvue`
 - `pages.json`（路由与 easycom）
 - `pages/game/match/match.test.js`
 
-**Approach：** Lobby 开始新局（可选 seed；难度固定 Normal，Hard/OEP 见 Deferred）；Match 绑定 store，根据 `pendingChoice` 弹出选牌/弃牌/宣言 UI；阶段条 + AP 指示；AI 回合遮罩 + 日志。
+**Approach：** Lobby 开始新局（可选 seed；难度固定 Normal，Hard/OEP 见 Deferred）；**起手阶段**展示牌库浏览与自选 UI（`opening-hand-picker`），人类选满 3 张后 AI 自选；Match 绑定 store，根据 `pendingChoice` 弹出选牌/弃牌/宣言 UI；阶段条 + AP 指示；AI 回合遮罩 + 日志。
 
 **Patterns to follow：** `pages/index/index.uvue` 组合式结构；`store/index.uts` reactive 模式；`styles/common.css` flex 布局。
 
 **Test scenarios：**
-- 点击「开始游戏」进入 match 页，显示 3 张手牌与 21 金池
-- Main 阶段 AP=2 时抽牌按钮可点，抽后 AP=1
+- 点击「开始游戏」进入起手选牌，可自选皇室/魔物牌库抽牌 3 次
+- 选满 3 张后进入 match 主界面，显示 3 张手牌与个人金币（初始为 0）
+- Main 阶段 AP=2 时抽牌按钮可点，抽后 AP=1；按钮显示牌库剩余数量
 - 攻击声明时出现响应 UI（若人类持有触发卡）
 - End 手牌超限出现弃牌选择，选够 4 张后可结束
 - AI 回合玩家操作按钮 disabled
@@ -558,7 +567,7 @@ U5/U6 可并行，但 U8 依赖 U5+U6 全卡完成后再集成。
 ## Documentation Plan
 
 - 首版不单独写玩家规则书；Lobby 页提供简要规则链接或折叠说明。
-- 开发者注释：`game/types.uts` 顶部说明 Intent/Phase 词汇表。
+- 开发者注释：`game/types.uts` 顶部说明 Intent/Phase 词汇表（含 `OpeningHandPick`；**不含** `goldPool`）。
 
 ---
 

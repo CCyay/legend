@@ -3,6 +3,7 @@
     <text class="title">Legend 双人卡牌</text>
     <text class="subtitle">皇室 vs 魔物 · 人机对战</text>
     <view class="rules">
+      <text class="rule-line">起手：自选皇室/魔物牌库各抽若干，共 3 张</text>
       <text class="rule-line">胜利：先获得 5 枚金币，或牌库抽空后金币最多</text>
       <text class="rule-line">每回合 2 行动点：抽牌或出牌</text>
       <text class="rule-line">触发卡可在被攻击时打出</text>

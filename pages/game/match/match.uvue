@@ -3,95 +3,218 @@
     <text>未找到对局，请返回大厅</text>
     <button @click="goLobby">返回大厅</button>
   </view>
-  <view v-else class="match-layout">
-    <!-- 上方：AI -->
-    <view class="player ai" :class="{ 'player--active': isAiActive }">
-      <view class="player-meta">
-        <text class="pname">{{ ai?.name }}</text>
-        <text class="meta-item">{{ ai?.gold ?? 0 }} 金</text>
-        <text class="meta-item">手牌 {{ ai?.hand.length ?? 0 }}</text>
-        <text class="meta-item meta-highlight">{{ aiStatusText }}</text>
+  <view v-else class="match-page">
+    <view class="match-main">
+      <view class="battle-board">
+        <!-- 上 1/3：AI 手牌 -->
+        <view class="board-tier">
+          <view
+            class="player-zone player-zone--ai player-zone--ai-hand"
+            :class="{ 'player-zone--active': isAiActive }">
+            <view class="hand-bar">
+              <view class="player-meta player-meta--side">
+                <text class="pname">{{ ai?.name }}</text>
+                <text class="meta-item">{{ ai?.gold ?? 0 }} 金</text>
+                <text class="meta-item">手牌 {{ ai?.hand.length ?? 0 }}</text>
+                <text class="meta-item meta-highlight">{{ aiStatusText }}</text>
+              </view>
+              <view class="hand-area">
+                <scroll-view class="hand-scroll hand-scroll--fill" scroll-x="true" :show-scrollbar="true">
+                  <view class="hand-track" :style="{ width: aiHandTrackWidth }">
+                    <card-back
+                      v-for="card in ai?.hand"
+                      :key="card.instanceId"
+                      :def-id="card.defId"
+                      mini />
+                    <text v-if="(ai?.hand.length ?? 0) == 0" class="field-empty">无</text>
+                  </view>
+                </scroll-view>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <!-- 中 1/3：独立场地区 -->
+        <view class="board-tier board-tier--field">
+          <view class="field-arena">
+            <view
+              class="field-arena__col field-arena__col--ai"
+              :class="{ 'field-arena__col--active': isAiActive }">
+              <text class="zone-label">AI 场上</text>
+              <scroll-view class="field-scroll field-scroll--fill" scroll-x="true" :show-scrollbar="true">
+                <view class="field-track" :style="{ width: aiFieldTrackWidth }">
+                  <view
+                    v-for="card in ai?.field"
+                    :key="card.instanceId"
+                    class="field-card-wrap"
+                    @click.stop="openCardPreview(card.defId, 'field')">
+                    <card-face
+                      :def-id="card.defId"
+                      :brief="true" />
+                  </view>
+                  <text v-if="(ai?.field.length ?? 0) == 0" class="field-empty">无</text>
+                </view>
+              </scroll-view>
+            </view>
+            <view
+              id="human-field-drop"
+              class="field-arena__col field-arena__col--human"
+              :class="{
+                'field-arena__col--active': isHumanActive,
+                'field-arena__col--drop-target': dragUi.overField
+              }">
+              <text class="zone-label">你的场上</text>
+              <scroll-view class="field-scroll field-scroll--fill" scroll-x="true" :show-scrollbar="true">
+                <view class="field-track" :style="{ width: humanFieldTrackWidth }">
+                  <view
+                    v-for="card in human?.field"
+                    :key="card.instanceId"
+                    class="field-card-wrap"
+                    @click.stop="openCardPreview(card.defId, 'field')">
+                    <card-face
+                      :def-id="card.defId"
+                      :brief="true" />
+                  </view>
+                  <text v-if="(human?.field.length ?? 0) == 0" class="field-empty">无</text>
+                </view>
+              </scroll-view>
+            </view>
+          </view>
+        </view>
+
+        <!-- 下 1/3：玩家手牌 -->
+        <view class="board-tier">
+          <view
+            class="player-zone player-zone--human player-zone--human-hand"
+            :class="{ 'player-zone--active': isHumanActive }">
+            <view class="hand-bar">
+              <view class="player-meta player-meta--side player-meta--human">
+                <text class="pname">{{ human?.name }} (你)</text>
+                <text class="meta-item">{{ human?.gold ?? 0 }} 金</text>
+                <text class="meta-item">手牌 {{ human?.hand.length ?? 0 }}</text>
+                <text class="meta-item meta-highlight">{{ humanStatusText }}</text>
+              </view>
+              <view class="hand-area hand-area--player">
+                <scroll-view
+                  class="hand-scroll hand-scroll--player"
+                  :scroll-x="!dragUi.pointerActive"
+                  :show-scrollbar="true">
+                  <view class="hand-track" :style="{ width: humanHandTrackWidth }">
+                    <view
+                      v-for="card in human?.hand"
+                      :key="card.instanceId"
+                      class="hand-card-wrap"
+                      :class="{
+                        'hand-card-wrap--ghost': dragUi.dragging && dragUi.instanceId == card.instanceId
+                      }"
+                      @touchstart.stop="onPointerTouchStart($event as TouchEvent, card.instanceId, card.defId)"
+                      @touchmove.stop.prevent="onPointerTouchMove($event as TouchEvent)"
+                      @touchend="onPointerTouchEnd($event as TouchEvent)"
+                      @touchcancel="onPointerTouchEnd($event as TouchEvent)"
+                      @mousedown.stop="onPointerMouseDown($event as MouseEvent, card.instanceId, card.defId)"
+                      @mouseup.stop="onPointerMouseUp($event as MouseEvent)">
+                      <card-face
+                        :def-id="card.defId"
+                        :brief="true" />
+                    </view>
+                  </view>
+                </scroll-view>
+              </view>
+            </view>
+          </view>
+        </view>
       </view>
-      <text class="hand-label">手牌</text>
-      <scroll-view class="hand-scroll hand-scroll--ai" scroll-x="true" :show-scrollbar="true">
-        <view class="hand-track" :style="{ width: aiHandTrackWidth }">
-          <card-back
-            v-for="card in ai?.hand"
-            :key="card.instanceId"
-            :def-id="card.defId" />
-          <text v-if="(ai?.hand.length ?? 0) == 0" class="field-empty">无</text>
-        </view>
-      </scroll-view>
-      <text class="field-label">场上</text>
-      <scroll-view class="field-scroll" scroll-x="true" :show-scrollbar="true">
-        <view class="field-track" :style="{ width: aiFieldTrackWidth }">
-          <card-face
-            v-for="card in ai?.field"
-            :key="card.instanceId"
-            :def-id="card.defId"
-            :compact="true" />
-          <text v-if="(ai?.field.length ?? 0) == 0" class="field-empty">无</text>
-        </view>
-      </scroll-view>
     </view>
 
-    <!-- 中间：操作区 -->
+    <!-- 起手自选 -->
+    <opening-hand-picker
+      v-if="showHumanOpeningPicker"
+      :royal-deck="game!.royalDeck"
+      :monster-deck="game!.monsterDeck"
+      :remaining="humanOpeningRemaining"
+      @pick="onOpeningPick" />
+
+    <view v-if="showAiOpeningPick" class="opening-ai-wait">
+      <text class="opening-ai-wait__text">AI 正在选择起手牌…</text>
+    </view>
+
+    <!-- 拖拽捕获层（鼠标拖拽 + 触摸超出卡牌区域时继续跟踪） -->
+    <view
+      v-if="dragUi.pointerActive"
+      class="drag-capture-layer"
+      @mousemove.stop.prevent="onPointerMouseMove($event as MouseEvent)"
+      @mouseup="onPointerMouseUp($event as MouseEvent)"
+      @mouseleave="onPointerMouseUp($event as MouseEvent)">
+    </view>
+
+    <!-- 拖拽中的卡牌浮层 -->
+    <view
+      v-if="dragUi.dragging"
+      class="drag-ghost"
+      :style="{ left: dragUi.ghostX + 'px', top: dragUi.ghostY + 'px' }">
+      <card-face :def-id="dragUi.defId" brief />
+    </view>
+
+    <!-- 手牌详情预览 -->
+    <view v-if="cardPreviewDefId != ''" class="card-preview-overlay" @click="closeCardPreview">
+      <view class="card-preview-modal" @click.stop="">
+        <card-face :def-id="cardPreviewDefId" :preview="true" />
+        <text class="card-preview-hint">{{ cardPreviewHint }}</text>
+        <button size="mini" class="card-preview__close" @click="closeCardPreview">关闭</button>
+      </view>
+    </view>
+
+    <!-- 弃牌详情弹层 -->
+    <view v-if="discardPanel != 'none'" class="discard-overlay" @click="closeDiscardPanel">
+      <view class="discard-modal" @click.stop="">
+        <text class="discard-modal__title">{{ discardPanelTitle }}</text>
+        <scroll-view class="discard-modal-scroll" scroll-y="true" :show-scrollbar="true">
+          <view class="discard-modal-grid">
+            <card-face
+              v-for="card in activeDiscardCards"
+              :key="card.instanceId"
+              :def-id="card.defId"
+              :compact="true" />
+            <text v-if="activeDiscardCards.length == 0" class="field-empty">弃牌区为空</text>
+          </view>
+        </scroll-view>
+        <button size="mini" class="discard-modal__close" @click="closeDiscardPanel">关闭</button>
+      </view>
+    </view>
+
+    <!-- 右侧：操作区 -->
     <view class="action-center">
       <view v-if="lastError != ''" class="error">
         <text>{{ lastError }}</text>
       </view>
-      <text class="pool-label">公共金币池 {{ game!.goldPool }}</text>
       <view v-if="game!.responseWindow != null" class="response-box">
-        <text>响应窗口：可打出触发卡</text>
-        <button size="mini" @click="passResponse">跳过响应</button>
+        <text class="response-text">响应窗口</text>
+        <text class="response-hint">可打出触发卡</text>
+        <button size="mini" @click="passResponse">跳过</button>
       </view>
-      <view v-if="game!.phase == 'gameover'" class="gameover">
+      <view v-else-if="game!.phase == 'gameover'" class="gameover">
         <text v-if="game!.isDraw">和局！</text>
         <text v-else-if="game!.winnerId == human?.id">你赢了！</text>
         <text v-else>AI 获胜</text>
-        <button @click="goLobby">返回大厅</button>
-      </view>
-      <view v-else class="actions">
-        <button size="mini" :disabled="!canDrawRoyal" @click="drawRoyal">抽皇室</button>
-        <button size="mini" :disabled="!canDrawMonster" @click="drawMonster">抽魔物</button>
-        <button size="mini" type="warn" :disabled="!canEndPhase" @click="endPhase">结束阶段</button>
-      </view>
-    </view>
-
-    <!-- 下方：玩家（场上在上，手牌在下） -->
-    <view class="player human" :class="{ 'player--active': isHumanActive }">
-      <view class="player-meta">
-        <text class="pname">{{ human?.name }} (你)</text>
-        <text class="meta-item">{{ human?.gold ?? 0 }} 金</text>
-        <text class="meta-item">手牌 {{ human?.hand.length ?? 0 }}</text>
-        <text class="meta-item meta-highlight">{{ humanStatusText }}</text>
-      </view>
-      <view class="human-body">
-        <view class="human-field-block">
-          <text class="field-label">场上</text>
-          <scroll-view class="field-scroll" scroll-x="true" :show-scrollbar="true">
-            <view class="field-track" :style="{ width: humanFieldTrackWidth }">
-              <card-face
-                v-for="card in human?.field"
-                :key="card.instanceId"
-                :def-id="card.defId"
-                :compact="true" />
-              <text v-if="(human?.field.length ?? 0) == 0" class="field-empty">无</text>
-            </view>
-          </scroll-view>
+        <view class="discard-actions">
+          <button size="mini" @click="openDiscardPanel('royal')">皇室弃 {{ royalDiscardCount }}</button>
+          <button size="mini" @click="openDiscardPanel('monster')">魔物弃 {{ monsterDiscardCount }}</button>
         </view>
-        <view class="human-hand-block">
-          <text class="hand-label">手牌</text>
-          <scroll-view class="hand-scroll hand-scroll--human" scroll-x="true" :show-scrollbar="true">
-            <view class="hand-track" :style="{ width: humanHandTrackWidth }">
-              <card-face
-                v-for="card in human?.hand"
-                :key="card.instanceId"
-                :def-id="card.defId"
-                hand-mode
-                @click="onPlayCard(card.instanceId)" />
-            </view>
-          </scroll-view>
+        <button size="mini" @click="goLobby">返回大厅</button>
+      </view>
+      <view v-else-if="game!.phase == 'opening_hand'" class="action-stack">
+        <text class="opening-status">起手选牌</text>
+        <text class="opening-status-hint">自选牌库抽牌，共 3 次</text>
+      </view>
+      <view v-else class="action-stack">
+        <view class="discard-actions">
+          <button size="mini" @click="openDiscardPanel('royal')">皇室弃 {{ royalDiscardCount }}</button>
+          <button size="mini" @click="openDiscardPanel('monster')">魔物弃 {{ monsterDiscardCount }}</button>
+        </view>
+        <view class="actions actions--side">
+          <button size="mini" :disabled="!canDrawRoyal" @click="drawRoyal">抽皇室 {{ royalDeckCount }}</button>
+          <button size="mini" :disabled="!canDrawMonster" @click="drawMonster">抽魔物 {{ monsterDeckCount }}</button>
+          <button size="mini" type="warn" :disabled="!canEndPhase" @click="endPhase">结束阶段</button>
         </view>
       </view>
     </view>
@@ -99,12 +222,14 @@
 </template>
 
 <script setup lang="uts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, reactive } from 'vue'
 import { gameState, sendIntent, getHumanPlayer, getAiPlayer, startNewGame } from '@/store/game.uts'
 import { HUMAN_PLAYER_ID, AI_PLAYER_ID } from '@/game/types.uts'
+import type { CardInstance, DrawPile } from '@/game/types.uts'
 import { pickAiTurn } from '@/game/ai/opponent.uts'
 import CardFace from '@/components/game/card-face.uvue'
 import CardBack from '@/components/game/card-back.uvue'
+import OpeningHandPicker from '@/components/game/opening-hand-picker.uvue'
 
 const game = computed(() => gameState.game)
 const human = computed(() => getHumanPlayer())
@@ -123,6 +248,7 @@ const isAiActive = computed(() => {
 
 function phaseLabel(phase : string) : string {
   const map : UTSJSONObject = {
+    opening_hand: '起手选牌',
     prep: '准备阶段',
     main: '主要阶段',
     end: '结束阶段',
@@ -135,6 +261,13 @@ function phaseLabel(phase : string) : string {
 function buildPlayerStatus(playerId : string, isActive : boolean) : string {
   const g = gameState.game
   if (g == null || !isActive) return '等待中'
+  if (g.phase == 'opening_hand') {
+    const c = g.pendingChoice
+    if (c != null && c.type == 'openingHand' && c.playerId == playerId) {
+      return `还需选 ${c.remaining} 张`
+    }
+    return '等待选牌'
+  }
   if (g.phase == 'main') return `行动点 ${g.actionPoints}`
   return phaseLabel(g.phase)
 }
@@ -144,13 +277,128 @@ const aiStatusText = computed(() => buildPlayerStatus(AI_PLAYER_ID, isAiActive.v
 
 function trackWidthPx(itemWidth : number, count : number) : string {
   if (count <= 0) return '100%'
-  return `${count * itemWidth + 16}px`
+  return `${count * itemWidth + 12}px`
 }
 
-const humanHandTrackWidth = computed(() => trackWidthPx(144, human.value?.hand.length ?? 0))
-const aiHandTrackWidth = computed(() => trackWidthPx(60, ai.value?.hand.length ?? 0))
-const humanFieldTrackWidth = computed(() => trackWidthPx(148, human.value?.field.length ?? 0))
-const aiFieldTrackWidth = computed(() => trackWidthPx(148, ai.value?.field.length ?? 0))
+const humanHandTrackWidth = computed(() => trackWidthPx(88, human.value?.hand.length ?? 0))
+const aiHandTrackWidth = computed(() => trackWidthPx(46, ai.value?.hand.length ?? 0))
+const humanFieldTrackWidth = computed(() => trackWidthPx(88, human.value?.field.length ?? 0))
+const aiFieldTrackWidth = computed(() => trackWidthPx(88, ai.value?.field.length ?? 0))
+
+const uiState = reactive({
+  discardPanel: 'none',
+  cardPreviewDefId: '',
+  previewContext: 'hand'
+})
+
+const dragUi = reactive({
+  instanceId: '',
+  defId: '',
+  dragging: false,
+  pointerActive: false,
+  ghostX: 0,
+  ghostY: 0,
+  startX: 0,
+  startY: 0,
+  overField: false,
+  blockClick: false
+})
+
+const DRAG_THRESHOLD = 10
+
+const discardPanel = computed(() => uiState.discardPanel)
+const cardPreviewDefId = computed(() => uiState.cardPreviewDefId)
+const cardPreviewHint = computed(() => {
+  if (uiState.previewContext == 'field') return '点击关闭返回'
+  return '拖动卡牌至「你的场上」打出'
+})
+
+const humanOpeningRemaining = computed(() => {
+  const g = gameState.game
+  const c = g?.pendingChoice
+  if (g != null && g.phase == 'opening_hand' && c != null && c.type == 'openingHand'
+    && c.playerId == HUMAN_PLAYER_ID) {
+    return c.remaining
+  }
+  return 0
+})
+
+const showHumanOpeningPicker = computed(() => humanOpeningRemaining.value > 0)
+
+const showAiOpeningPick = computed(() => {
+  const g = gameState.game
+  const c = g?.pendingChoice
+  return g != null && g.phase == 'opening_hand' && c != null && c.type == 'openingHand'
+    && c.playerId == AI_PLAYER_ID
+})
+
+const royalDiscard = computed((): CardInstance[] => {
+  const g = gameState.game
+  return g != null ? g.royalDiscard : [] as CardInstance[]
+})
+
+const monsterDiscard = computed((): CardInstance[] => {
+  const g = gameState.game
+  return g != null ? g.monsterDiscard : [] as CardInstance[]
+})
+
+const royalDiscardCount = computed(() => royalDiscard.value.length)
+const monsterDiscardCount = computed(() => monsterDiscard.value.length)
+
+const royalDeckCount = computed(() => game.value?.royalDeck.length ?? 0)
+const monsterDeckCount = computed(() => game.value?.monsterDeck.length ?? 0)
+
+const activeDiscardCards = computed((): CardInstance[] => {
+  if (discardPanel.value == 'royal') return royalDiscard.value
+  if (discardPanel.value == 'monster') return monsterDiscard.value
+  return [] as CardInstance[]
+})
+
+const discardPanelTitle = computed(() => {
+  if (discardPanel.value == 'royal') return `皇室弃牌（${royalDiscardCount.value}）`
+  if (discardPanel.value == 'monster') return `魔物弃牌（${monsterDiscardCount.value}）`
+  return ''
+})
+
+function openDiscardPanel(faction : string) {
+  uiState.discardPanel = faction
+}
+
+function closeDiscardPanel() {
+  uiState.discardPanel = 'none'
+}
+
+function openCardPreview(defId : string, context : string = 'hand') {
+  uiState.cardPreviewDefId = defId
+  uiState.previewContext = context
+}
+
+function closeCardPreview() {
+  uiState.cardPreviewDefId = ''
+  uiState.previewContext = 'hand'
+}
+
+function onOpeningPick(pile : string) {
+  sendIntent({
+    type: 'pickOpeningHand',
+    playerId: HUMAN_PLAYER_ID,
+    pile: pile as DrawPile
+  })
+  runAiIfNeeded()
+}
+
+function onHandCardClick(defId : string) {
+  if (dragUi.blockClick || dragUi.dragging) return
+  openCardPreview(defId)
+  markDragEnded()
+}
+
+function markDragEnded() {
+  dragUi.blockClick = true
+  setTimeout(() => {
+    dragUi.blockClick = false
+  }, 120)
+}
 
 const canDrawRoyal = computed(() => {
   const g = gameState.game
@@ -173,13 +421,123 @@ const canEndPhase = computed(() => {
 })
 
 function onPlayCard(instanceId : string) {
-  if (gameState.game == null) return
+  if (gameState.game == null || gameState.game.phase != 'main') return
   sendIntent({
     type: 'playCard',
     playerId: HUMAN_PLAYER_ID,
     instanceId
   })
   runAiIfNeeded()
+}
+
+function readTouchPoint(e : TouchEvent, useChanged : boolean) : { x : number, y : number } | null {
+  const list = useChanged ? e.changedTouches : e.touches
+  if (list.length == 0) return null
+  const t = list[0]
+  return { x: t.clientX, y: t.clientY }
+}
+
+function resetDrag() {
+  dragUi.instanceId = ''
+  dragUi.defId = ''
+  dragUi.dragging = false
+  dragUi.pointerActive = false
+  dragUi.overField = false
+}
+
+function beginPointer(instanceId : string, defId : string, x : number, y : number) {
+  dragUi.instanceId = instanceId
+  dragUi.defId = defId
+  dragUi.pointerActive = true
+  dragUi.dragging = false
+  dragUi.overField = false
+  dragUi.startX = x
+  dragUi.startY = y
+  dragUi.ghostX = x
+  dragUi.ghostY = y
+}
+
+function updateDropHighlight(clientX : number, clientY : number) {
+  uni.createSelectorQuery().select('#human-field-drop').boundingClientRect((rect) => {
+    if (rect == null) {
+      dragUi.overField = false
+      return
+    }
+    const inside = clientX >= rect.left && clientX <= rect.right
+      && clientY >= rect.top && clientY <= rect.bottom
+    dragUi.overField = inside
+  }).exec()
+}
+
+function movePointer(x : number, y : number) {
+  if (!dragUi.pointerActive) return
+  const dx = x - dragUi.startX
+  const dy = y - dragUi.startY
+  if (!dragUi.dragging && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+    dragUi.dragging = true
+  }
+  if (dragUi.dragging) {
+    dragUi.ghostX = x
+    dragUi.ghostY = y
+    updateDropHighlight(x, y)
+  }
+}
+
+function finishPointer(x : number, y : number) {
+  if (!dragUi.pointerActive) return
+  const instanceId = dragUi.instanceId
+  const defId = dragUi.defId
+  const wasDragging = dragUi.dragging
+  if (wasDragging) {
+    uni.createSelectorQuery().select('#human-field-drop').boundingClientRect((rect) => {
+      let play = false
+      if (rect != null) {
+        play = x >= rect.left && x <= rect.right
+          && y >= rect.top && y <= rect.bottom
+      }
+      resetDrag()
+      markDragEnded()
+      if (play) onPlayCard(instanceId)
+    }).exec()
+    return
+  }
+  resetDrag()
+  onHandCardClick(defId)
+}
+
+function onPointerTouchStart(e : TouchEvent, instanceId : string, defId : string) {
+  const pt = readTouchPoint(e, false)
+  if (pt == null) return
+  beginPointer(instanceId, defId, pt.x, pt.y)
+}
+
+function onPointerTouchMove(e : TouchEvent) {
+  const pt = readTouchPoint(e, false)
+  if (pt == null) return
+  movePointer(pt.x, pt.y)
+}
+
+function onPointerTouchEnd(e : TouchEvent) {
+  const pt = readTouchPoint(e, true)
+  if (pt == null) {
+    resetDrag()
+    return
+  }
+  finishPointer(pt.x, pt.y)
+}
+
+function onPointerMouseDown(e : MouseEvent, instanceId : string, defId : string) {
+  if (e.button != 0) return
+  beginPointer(instanceId, defId, e.clientX, e.clientY)
+}
+
+function onPointerMouseMove(e : MouseEvent) {
+  movePointer(e.clientX, e.clientY)
+}
+
+function onPointerMouseUp(e : MouseEvent) {
+  if (!dragUi.pointerActive) return
+  finishPointer(e.clientX, e.clientY)
 }
 
 function drawRoyal() {
@@ -225,143 +583,433 @@ defineExpose({ goLobby, drawRoyal, endPhase })
 </script>
 
 <style>
-.match-layout {
+.match-page {
   flex: 1;
-  flex-direction: column;
-  padding: 10px;
-  background-color: #f0f2f5;
+  flex-direction: row;
+  height: 100%;
   min-height: 0;
+  padding: 6px;
+  background-color: #f0f2f5;
 }
-.player {
-  padding: 12px;
-  border-radius: 12px;
+.match-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+.battle-board {
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  background-color: #f5f5f5;
+}
+.opening-ai-wait {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.35);
+  align-items: center;
+  justify-content: center;
+  z-index: 350;
+}
+.opening-ai-wait__text {
+  font-size: 16px;
+  color: #fff;
+  font-weight: bold;
+}
+.opening-status {
+  font-size: 14px;
+  font-weight: bold;
+  color: #1565c0;
+  text-align: center;
+  margin-bottom: 4px;
+}
+.opening-status-hint {
+  font-size: 11px;
+  color: #666;
+  text-align: center;
+}
+.card-preview-overlay {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+.discard-overlay {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.card-preview-modal {
+  width: auto;
+  max-width: 92%;
   background-color: #fff;
+  border-radius: 14px;
+  padding: 16px;
+  flex-direction: column;
+  align-items: center;
+}
+.card-preview-hint {
+  font-size: 12px;
+  color: #666;
+  margin-top: 10px;
+  text-align: center;
+}
+.card-preview__close {
+  width: 120px;
+  margin-top: 10px;
+}
+.discard-modal {
+  width: 88%;
+  max-height: 75%;
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 12px;
+  flex-direction: column;
+}
+.discard-modal__title {
+  font-size: 15px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 8px;
+  text-align: center;
+}
+.discard-modal-scroll {
+  flex: 1;
+  min-height: 120px;
+  max-height: 360px;
+  width: 100%;
+}
+.discard-modal-grid {
+  flex-direction: row;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+}
+.discard-modal__close {
+  width: 100%;
+  margin-top: 8px;
+}
+.discard-actions {
+  flex-direction: column;
+  width: 100%;
+  margin-bottom: 6px;
+}
+.discard-actions button {
+  width: 100%;
+  margin: 2px 0;
+  font-size: 11px;
+}
+.board-tier {
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.board-tier--field {
+  padding: 2px 0;
+}
+/* 独立场地区 */
+.field-arena {
+  flex: 1;
+  min-height: 0;
+  flex-direction: row;
   border-width: 2px;
   border-style: solid;
-  flex-shrink: 0;
+  border-color: #78909c;
+  border-radius: 8px;
+  background-color: #fff;
+  overflow: hidden;
 }
-.player--active {
+.field-arena__col {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  padding: 4px 6px;
+}
+.field-arena__col--ai {
+  background-color: #faf7fc;
+  border-right-width: 1px;
+  border-right-style: dashed;
+  border-right-color: #d0d0d0;
+}
+.field-arena__col--human {
+  background-color: #fffdf5;
+}
+.field-arena__col--active {
+  background-color: #f3f8ff;
+}
+.field-arena__col--drop-target {
+  background-color: #e3f2fd;
   border-color: #2196f3;
 }
-.ai {
-  border-color: #9b59b6;
-  margin-bottom: 8px;
-}
-.human {
-  border-color: #ffc107;
-  margin-top: 8px;
+/* 手牌区边框：AI 上区 / 玩家 下区 */
+.player-zone {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   flex-direction: column;
+  padding: 4px 6px;
+  background-color: #fff;
 }
-.human-body {
-  flex-direction: column;
+.player-zone--ai {
+  background-color: #faf7fc;
 }
-.human-field-block {
-  margin-bottom: 10px;
+.player-zone--human {
+  background-color: #fffdf5;
 }
-.human-hand-block {
-  padding-top: 8px;
-  border-top-width: 1px;
-  border-top-style: dashed;
-  border-top-color: #e0e0e0;
+.player-zone--ai-hand {
+  border-top-width: 2px;
+  border-top-style: solid;
+  border-top-color: #9b59b6;
+  border-left-width: 2px;
+  border-left-style: solid;
+  border-left-color: #9b59b6;
+  border-right-width: 2px;
+  border-right-style: solid;
+  border-right-color: #9b59b6;
+  border-bottom-width: 2px;
+  border-bottom-style: solid;
+  border-bottom-color: #9b59b6;
+}
+.player-zone--human-hand {
+  border-left-width: 2px;
+  border-left-style: solid;
+  border-left-color: #ffc107;
+  border-right-width: 2px;
+  border-right-style: solid;
+  border-right-color: #ffc107;
+  border-bottom-width: 2px;
+  border-bottom-style: solid;
+  border-bottom-color: #ffc107;
+  border-top-width: 2px;
+  border-top-style: solid;
+  border-top-color: #ffc107;
+}
+.player-zone--active {
+  background-color: #f3f8ff;
+}
+.player-zone--active.player-zone--ai-hand,
+.player-zone--active.player-zone--human-hand {
+  border-color: #2196f3;
+}
+.hand-card-wrap {
+  flex-shrink: 0;
+  user-select: none;
+}
+.field-card-wrap {
+  flex-shrink: 0;
+}
+.hand-card-wrap--ghost {
+  opacity: 0.35;
+}
+.drag-capture-layer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 150;
+  background-color: transparent;
+}
+.drag-ghost {
+  position: fixed;
+  z-index: 200;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+.zone-label {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 2px;
+}
+.hand-bar {
+  flex: 1;
+  min-height: 0;
+  flex-direction: row;
+  align-items: stretch;
+}
+.hand-area--player {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  justify-content: center;
+}
+.hand-scroll--player {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+.hand-scroll--fill {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+.field-scroll--fill {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 .player-meta {
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
-  margin-bottom: 8px;
+}
+.player-meta--side {
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 76px;
+  padding-right: 6px;
+  margin-right: 4px;
+  border-right-width: 1px;
+  border-right-style: dashed;
+  border-right-color: #d0c4e8;
+  justify-content: center;
+}
+.player-meta--human {
+  border-right-color: #e8dcc0;
+}
+.player-meta--side .pname {
+  font-size: 12px;
+  font-weight: bold;
+  margin-right: 0;
+  margin-bottom: 2px;
+}
+.player-meta--side .meta-item {
+  font-size: 10px;
+  line-height: 14px;
+  margin-right: 0;
+}
+.player-meta--side .meta-highlight {
+  font-size: 10px;
 }
 .pname {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: bold;
-  margin-right: 10px;
+  margin-right: 8px;
 }
 .meta-item {
-  font-size: 13px;
+  font-size: 12px;
   color: #555;
-  margin-right: 10px;
+  margin-right: 8px;
 }
 .meta-highlight {
   color: #1565c0;
   font-weight: bold;
 }
 .action-center {
-  padding: 12px;
-  margin: 4px 0;
-  border-radius: 12px;
+  width: 108px;
+  flex-shrink: 0;
+  margin-left: 6px;
+  padding: 8px 6px;
+  border-radius: 10px;
   background-color: #fff;
-  align-items: center;
+  align-items: stretch;
   border-width: 1px;
   border-color: #e0e0e0;
   border-style: solid;
-  flex-shrink: 0;
+  flex-direction: column;
+  justify-content: flex-start;
 }
-.pool-label {
-  font-size: 13px;
-  color: #666;
-  margin-bottom: 10px;
+.action-stack {
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
 }
-.actions {
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
+.actions--side {
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
 }
-.actions button {
-  margin: 4px 6px;
+.actions--side button {
+  margin: 3px 0;
+  width: 100%;
+}
+.response-text {
+  font-size: 12px;
+  font-weight: bold;
+  color: #1565c0;
+  margin-bottom: 2px;
+}
+.response-hint {
+  font-size: 10px;
+  color: #555;
+  margin-bottom: 6px;
+  text-align: center;
 }
 .error {
   background-color: #ffe0e0;
-  padding: 8px;
-  border-radius: 8px;
-  margin-bottom: 8px;
+  padding: 6px;
+  border-radius: 6px;
+  margin-bottom: 6px;
   width: 100%;
 }
 .response-box {
   background-color: #d4edff;
-  padding: 10px;
-  border-radius: 8px;
-  margin-bottom: 10px;
+  padding: 6px;
+  border-radius: 6px;
   align-items: center;
   width: 100%;
+}
+.response-box button {
+  width: 100%;
+  margin-top: 4px;
 }
 .gameover {
   align-items: center;
-  padding: 12px;
+  padding: 8px 4px;
   background-color: #e8f5e9;
-  border-radius: 8px;
+  border-radius: 6px;
   width: 100%;
 }
-.hand-label, .field-label {
-  font-size: 12px;
-  color: #888;
-  margin-bottom: 4px;
+.gameover button {
+  width: 100%;
+  margin-top: 6px;
+}
+.field-scroll {
+  width: 100%;
 }
 .hand-scroll {
   width: 100%;
 }
-.hand-scroll--human {
-  height: 196px;
+.hand-area {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
 }
-.hand-scroll--ai {
-  height: 92px;
+.hand-track {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  padding-right: 12px;
 }
-.field-scroll {
-  width: 100%;
-  height: 120px;
-}
-.hand-track, .field-track {
+.field-track {
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: flex-start;
   height: 100%;
-  padding-right: 16px;
-}
-.hand-track {
-  min-width: 100%;
+  padding-right: 12px;
 }
 .field-empty {
-  font-size: 12px;
+  font-size: 11px;
   color: #aaa;
-  padding: 8px;
+  padding: 4px;
 }
 .empty {
   flex: 1;

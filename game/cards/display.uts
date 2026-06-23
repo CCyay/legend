@@ -24,13 +24,7 @@ export function getCardDisplayByDefId(defId : string) : CardDisplayInfo | null {
 
 export function buildCardDisplay(def : CardDef) : CardDisplayInfo {
   const emblem = getEmblemLabel(def.emblem)
-  let levelText = `LV${def.level}`
-  if (def.priorityEmblem) {
-    if (def.emblem == 'crown') levelText = '国王'
-    else if (def.emblem == 'dragon') levelText = '火龙'
-    else if (def.emblem == 'demon') levelText = '魔王'
-    else levelText = `LV${def.level}★`
-  }
+  const levelText = `LV${def.level}`
   return {
     id: def.id,
     name: def.name,

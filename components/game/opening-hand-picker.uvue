@@ -1,0 +1,100 @@
+<template>
+  <view class="opening-overlay">
+    <view class="opening-modal">
+      <text class="opening-title">选择起手牌</text>
+      <text class="opening-subtitle">还需抽 {{ remaining }} 张 · 自选牌库（可混色）</text>
+
+      <view class="opening-actions">
+        <button
+          class="opening-draw-btn opening-draw-btn--royal"
+          :disabled="royalDeck.length == 0"
+          @click="emitPick('royal')">
+          抽皇室 {{ royalDeck.length }}
+        </button>
+        <button
+          class="opening-draw-btn opening-draw-btn--monster"
+          :disabled="monsterDeck.length == 0"
+          @click="emitPick('monster')">
+          抽魔物 {{ monsterDeck.length }}
+        </button>
+      </view>
+
+      <text class="opening-hint">每次从所选牌库顶抽 1 张，共选 3 次</text>
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+const props = defineProps<{
+  royalDeck : string[]
+  monsterDeck : string[]
+  remaining : number
+}>()
+
+const emit = defineEmits<{
+  (e : 'pick', pile : string) : void
+}>()
+
+function emitPick(pile : string) {
+  emit('pick', pile)
+}
+</script>
+
+<style>
+.opening-overlay {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  align-items: center;
+  justify-content: center;
+  z-index: 400;
+}
+.opening-modal {
+  width: 88%;
+  background-color: #fff;
+  border-radius: 14px;
+  padding: 20px 16px;
+  flex-direction: column;
+  align-items: center;
+}
+.opening-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #222;
+  text-align: center;
+  margin-bottom: 4px;
+}
+.opening-subtitle {
+  font-size: 13px;
+  color: #666;
+  text-align: center;
+  margin-bottom: 20px;
+}
+.opening-actions {
+  flex-direction: column;
+  width: 100%;
+  align-items: stretch;
+}
+.opening-draw-btn {
+  width: 100%;
+  margin: 6px 0;
+  font-size: 15px;
+}
+.opening-draw-btn--royal {
+  background-color: #fff8e1;
+  color: #f57f17;
+}
+.opening-draw-btn--monster {
+  background-color: #f3e5f5;
+  color: #7b1fa2;
+}
+.opening-hint {
+  font-size: 11px;
+  color: #888;
+  text-align: center;
+  margin-top: 14px;
+}
+</style>

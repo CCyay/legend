@@ -10,50 +10,42 @@ export const ROYAL_CARDS : CardDef[] = [
     emblem: 'crown',
     copyCount: 1,
     freeAction: false,
-    royalFamily: true,
-    priorityEmblem: true,
     effects: [{ kind: 'custom', handlerId: 'king' }],
-    tags: ['royal_family']
+    tags: []
   },
   {
     id: 'princess',
     name: '公主',
     faction: 'royal',
     cardType: 'continuous',
-    level: 3,
+    level: 6,
     emblem: 'crown',
-    copyCount: 2,
+    copyCount: 1,
     freeAction: true,
-    royalFamily: true,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'princess' }],
-    tags: ['royal_family', 'prep_trigger']
+    tags: ['prep_trigger']
   },
   {
     id: 'holy_grail',
     name: '圣杯',
     faction: 'royal',
     cardType: 'continuous',
-    level: 4,
+    level: 6,
     emblem: 'crown',
     copyCount: 1,
     freeAction: false,
-    royalFamily: true,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'holy_grail' }],
-    tags: ['royal_family', 'prep_trigger', 'unique_field']
+    tags: ['prep_trigger', 'unique_field']
   },
   {
     id: 'holy_sword',
     name: '圣剑',
     faction: 'royal',
     cardType: 'continuous',
-    level: 5,
+    level: 6,
     emblem: 'crown',
     copyCount: 1,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'holy_sword' }],
     tags: []
   },
@@ -67,8 +59,6 @@ export const ROYAL_CARDS : CardDef[] = [
     copyCount: 4,
     twoPlayerCopyCount: 3,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'blacksmith' }],
     tags: ['active_ability']
   },
@@ -82,8 +72,6 @@ export const ROYAL_CARDS : CardDef[] = [
     copyCount: 4,
     twoPlayerCopyCount: 3,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'fighter' }],
     tags: ['active_ability']
   },
@@ -96,8 +84,6 @@ export const ROYAL_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 3,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'guard' }],
     tags: ['counter_attack']
   },
@@ -110,8 +96,6 @@ export const ROYAL_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 2,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'nun' }],
     tags: ['on_opponent_discard']
   },
@@ -124,8 +108,6 @@ export const ROYAL_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 4,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'hero_lv4' }],
     tags: ['hero']
   },
@@ -138,8 +120,6 @@ export const ROYAL_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 2,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'hero_lv5' }],
     tags: ['hero', 'boss_emblem_target']
   },
@@ -152,8 +132,6 @@ export const ROYAL_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 2,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'merchant' }],
     tags: []
   },
@@ -166,8 +144,6 @@ export const ROYAL_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 2,
     freeAction: true,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'zenglu' }],
     tags: ['special_no_ap']
   },
@@ -180,8 +156,6 @@ export const ROYAL_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 2,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'wuniang' }],
     tags: ['on_opponent_gold']
   }

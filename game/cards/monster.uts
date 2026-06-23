@@ -10,8 +10,6 @@ export const MONSTER_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 2,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'dragon_egg' }],
     tags: ['dragon_prerequisite', 'immune_guard_flip']
   },
@@ -24,8 +22,6 @@ export const MONSTER_CARDS : CardDef[] = [
     emblem: 'dragon',
     copyCount: 1,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: true,
     effects: [{ kind: 'custom', handlerId: 'fire_dragon' }],
     tags: ['needs_dragon_egg']
   },
@@ -38,8 +34,6 @@ export const MONSTER_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 2,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'fairy' }],
     tags: ['on_opponent_discard']
   },
@@ -52,8 +46,6 @@ export const MONSTER_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 4,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'goblin' }],
     tags: []
   },
@@ -66,8 +58,6 @@ export const MONSTER_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 2,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'white_bone' }],
     tags: ['mass_field_reset']
   },
@@ -80,8 +70,6 @@ export const MONSTER_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 2,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'witch' }],
     tags: ['counter_royal_attack']
   },
@@ -94,8 +82,6 @@ export const MONSTER_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 2,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'dragon_flame' }],
     tags: ['mass_untap']
   },
@@ -108,8 +94,6 @@ export const MONSTER_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 3,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'slime' }],
     tags: ['once_per_turn']
   },
@@ -122,8 +106,6 @@ export const MONSTER_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 1,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'force_reveal_high' }],
     tags: ['force_reveal']
   },
@@ -136,8 +118,6 @@ export const MONSTER_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 1,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'force_reveal_high' }],
     tags: ['force_reveal']
   },
@@ -150,8 +130,6 @@ export const MONSTER_CARDS : CardDef[] = [
     emblem: 'none',
     copyCount: 1,
     freeAction: false,
-    royalFamily: false,
-    priorityEmblem: false,
     effects: [{ kind: 'custom', handlerId: 'force_reveal_high' }],
     tags: ['force_reveal']
   }

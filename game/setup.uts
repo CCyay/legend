@@ -1,6 +1,6 @@
 import type { GameState, PlayerState } from './types.uts'
 import {
-  HUMAN_PLAYER_ID, AI_PLAYER_ID, TOTAL_GOLD_POOL, INITIAL_HAND, MAIN_ACTION_POINTS
+  HUMAN_PLAYER_ID, AI_PLAYER_ID, INITIAL_HAND, MAIN_ACTION_POINTS
 } from './types.uts'
 import { SeededRng } from './rng.uts'
 import {
@@ -46,8 +46,8 @@ export function createGame(seed : number, options : CreateGameOptions) : GameSta
     if (monsterExPool[i] != monsterEx) removedEx.push(monsterExPool[i])
   }
 
-  let royalDeck = rng.shuffle(buildDeckIds('royal', options.playerCount, royalEx))
-  let monsterDeck = rng.shuffle(buildDeckIds('monster', options.playerCount, monsterEx))
+  const royalDeck = rng.shuffle(buildDeckIds('royal', options.playerCount, royalEx))
+  const monsterDeck = rng.shuffle(buildDeckIds('monster', options.playerCount, monsterEx))
 
   const humanFirst = options.humanFirst ?? rng.nextInt(2) == 0
   const firstPlayerId = humanFirst ? HUMAN_PLAYER_ID : AI_PLAYER_ID
@@ -57,30 +57,14 @@ export function createGame(seed : number, options : CreateGameOptions) : GameSta
     { id: AI_PLAYER_ID, name: 'AI', isHuman: false, gold: 0, hand: [], field: [] }
   ]
 
-  for (let p = 0; p < players.length; p++) {
-    for (let h = 0; h < INITIAL_HAND; h++) {
-      const useRoyal = rng.nextInt(2) == 0
-      if (useRoyal && royalDeck.length > 0) {
-        const defId = royalDeck.shift()!
-        players[p].hand.push(createInstance(defId, players[p].id))
-      } else if (monsterDeck.length > 0) {
-        const defId = monsterDeck.shift()!
-        players[p].hand.push(createInstance(defId, players[p].id))
-      } else if (royalDeck.length > 0) {
-        const defId = royalDeck.shift()!
-        players[p].hand.push(createInstance(defId, players[p].id))
-      }
-    }
-  }
-
   return {
     seed,
     tick: 0,
     turn: 1,
-    phase: 'main',
-    activePlayerId: firstPlayerId,
-    actionPoints: MAIN_ACTION_POINTS,
-    goldPool: TOTAL_GOLD_POOL,
+    phase: 'opening_hand',
+    activePlayerId: HUMAN_PLAYER_ID,
+    firstPlayerId,
+    actionPoints: 0,
     players,
     royalDeck,
     monsterDeck,
@@ -89,10 +73,14 @@ export function createGame(seed : number, options : CreateGameOptions) : GameSta
     removedEx,
     stack: [],
     responseWindow: null,
-    pendingChoice: null,
+    pendingChoice: {
+      type: 'openingHand',
+      playerId: HUMAN_PLAYER_ID,
+      remaining: INITIAL_HAND
+    },
     winnerId: null,
     isDraw: false,
-    events: [{ tick: 0, type: 'game_start', message: '对局开始' }],
+    events: [{ tick: 0, type: 'game_start', message: '请选择起手 3 张' }],
     flags: { slimePlayedThisTurn: false, holyGrailOnField: false }
   }
 }
@@ -119,18 +107,22 @@ export function drawFromPile(state : GameState, playerId : string, pile : 'royal
   }
 }
 
-export function takeGoldFromPool(state : GameState, playerId : string, amount : number) : GameState {
-  if (amount <= 0 || state.goldPool < amount) return state
+export function gainGold(state : GameState, playerId : string, amount : number) : GameState {
+  if (amount <= 0) return state
   const players = state.players.map((p) => {
     if (p.id != playerId) return p
     return { ...p, gold: p.gold + amount }
   })
   return {
     ...state,
-    goldPool: state.goldPool - amount,
     players,
     events: [...state.events, { tick: state.tick, type: 'gain_gold', message: `${playerId} +${amount} 金` }]
   }
+}
+
+/** @deprecated 兼容旧引用，请使用 gainGold */
+export function takeGoldFromPool(state : GameState, playerId : string, amount : number) : GameState {
+  return gainGold(state, playerId, amount)
 }
 
 export function discardCard(state : GameState, instance : import('./types.uts').CardInstance) : GameState {

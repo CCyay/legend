@@ -1,7 +1,7 @@
 <template>
   <view
     class="card-back"
-    :class="faction == 'royal' ? 'card-back--royal' : 'card-back--monster'">
+    :class="[faction == 'royal' ? 'card-back--royal' : 'card-back--monster', mini ? 'card-back--mini' : '']">
     <text class="card-back__icon">{{ faction == 'royal' ? '♛' : '♝' }}</text>
     <text class="card-back__mark">{{ faction == 'royal' ? '皇室' : '魔物' }}</text>
   </view>
@@ -13,6 +13,7 @@ import { getCardDef } from '@/game/cards/catalog.uts'
 
 const props = defineProps<{
   defId : string
+  mini ?: boolean
 }>()
 
 const faction = computed(() => {
@@ -40,6 +41,19 @@ const faction = computed(() => {
 .card-back--monster {
   background-color: #8e24aa;
   border-color: #6a1b9a;
+}
+.card-back--mini {
+  width: 38px;
+  height: 54px;
+  margin: 2px;
+  border-radius: 6px;
+}
+.card-back--mini .card-back__icon {
+  font-size: 16px;
+  margin-bottom: 2px;
+}
+.card-back--mini .card-back__mark {
+  font-size: 8px;
 }
 .card-back__icon {
   font-size: 22px;

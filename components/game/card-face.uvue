@@ -2,7 +2,13 @@
   <view
     v-if="info != null"
     class="card-face"
-    :class="[factionClass, compact ? 'card-face--compact' : '', handMode ? 'card-face--hand' : '']"
+    :class="[
+      factionClass,
+      compact ? 'card-face--compact' : '',
+      brief ? 'card-face--brief' : '',
+      handMode ? 'card-face--hand' : '',
+      preview ? 'card-face--preview' : ''
+    ]"
     @click="onTap">
     <view class="card-face__header">
       <text class="card-face__level">{{ info!.levelText }}</text>
@@ -11,9 +17,11 @@
       <text v-if="info!.freeAction" class="card-face__free">免费</text>
     </view>
     <text class="card-face__name">{{ info!.name }}</text>
-    <text v-if="handMode" class="card-face__desc card-face__desc--hand" :lines="5">{{ info!.description }}</text>
+    <text v-if="preview" class="card-face__desc">{{ info!.description }}</text>
+    <text v-else-if="handMode" class="card-face__desc card-face__desc--hand">{{ info!.description }}</text>
+    <text v-else-if="brief" class="card-face__desc card-face__desc--brief">点击查看效果</text>
     <text v-else-if="!compact" class="card-face__desc">{{ info!.description }}</text>
-    <text v-else class="card-face__desc card-face__desc--compact" :lines="3">{{ info!.description }}</text>
+    <text v-else class="card-face__desc card-face__desc--compact" :lines="2">{{ info!.description }}</text>
   </view>
 </template>
 
@@ -24,7 +32,9 @@ import { getCardDisplayByDefId } from '@/game/cards/display.uts'
 const props = defineProps<{
   defId : string
   compact ?: boolean
+  brief ?: boolean
   handMode ?: boolean
+  preview ?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -56,8 +66,10 @@ function onTap() {
   flex-shrink: 0;
 }
 .card-face--hand {
-  width: 136px;
-  min-height: 168px;
+  width: 118px;
+  padding: 6px;
+  margin: 2px;
+  flex-shrink: 0;
 }
 .card-face--royal {
   background-color: #fff8e1;
@@ -68,18 +80,49 @@ function onTap() {
   border-color: #9c27b0;
 }
 .card-face--compact {
-  width: 140px;
-  min-height: 96px;
-  padding: 8px;
+  width: 100px;
+  min-height: 66px;
+  padding: 6px;
+  margin: 4px 2px;
+}
+.card-face--brief {
+  width: 84px;
+  min-height: 48px;
+  padding: 4px;
+  margin: 2px;
+}
+.card-face--brief .card-face__name {
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+.card-face__desc--brief {
+  font-size: 8px;
+  color: #999;
+  line-height: 11px;
+}
+.card-face--preview {
+  width: 220px;
+  min-height: 0;
+  padding: 14px;
+  margin: 0;
+  flex-shrink: 0;
+}
+.card-face--preview .card-face__name {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.card-face--preview .card-face__desc {
+  font-size: 13px;
+  line-height: 20px;
 }
 .card-face__header {
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 3px;
 }
 .card-face__level {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: bold;
   color: #333;
   margin-right: 6px;
@@ -102,10 +145,10 @@ function onTap() {
   border-radius: 4px;
 }
 .card-face__name {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: bold;
   color: #1a1a1a;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .card-face__desc {
   font-size: 11px;
@@ -114,11 +157,16 @@ function onTap() {
   flex-shrink: 0;
 }
 .card-face__desc--hand {
-  font-size: 10px;
-  line-height: 15px;
+  font-size: 9px;
+  line-height: 13px;
+  flex-shrink: 0;
+}
+.card-face--hand .card-face__name {
+  font-size: 12px;
+  margin-bottom: 3px;
 }
 .card-face__desc--compact {
-  font-size: 10px;
-  line-height: 14px;
+  font-size: 9px;
+  line-height: 12px;
 }
 </style>

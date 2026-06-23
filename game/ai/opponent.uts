@@ -1,10 +1,62 @@
-import type { GameState, Intent } from '../types.uts'
+import type { GameState, Intent, DrawPile } from '../types.uts'
 import { AI_PLAYER_ID, HUMAN_PLAYER_ID } from '../types.uts'
 import { getCardDef } from '../cards/catalog.uts'
 import { canPlayCard } from '../effects/handlers/index.uts'
+import { SeededRng } from '../rng.uts'
+
+export function chooseOpeningPile(state : GameState) : DrawPile | null {
+  const rng = new SeededRng(state.seed + state.tick + state.players.find((p) => p.id == AI_PLAYER_ID)!.hand.length)
+  const royalLen = state.royalDeck.length
+  const monsterLen = state.monsterDeck.length
+  if (royalLen == 0 && monsterLen == 0) return null
+  if (royalLen == 0) return 'monster'
+  if (monsterLen == 0) return 'royal'
+  // 略偏向牌库较多的阵营，仍带随机性
+  return rng.nextInt(royalLen + monsterLen) < royalLen ? 'royal' : 'monster'
+}
+
+export function pickAiOpeningHandIntents(state : GameState) : Intent[] {
+  const intents : Intent[] = []
+  let simulated = state
+  const choice = simulated.pendingChoice
+  if (choice == null || choice.type != 'openingHand') return intents
+  let remaining = choice.remaining
+
+  while (remaining > 0) {
+    const pile = chooseOpeningPile(simulated)
+    if (pile == null) break
+    intents.push({
+      type: 'pickOpeningHand',
+      playerId: AI_PLAYER_ID,
+      pile
+    })
+    const deck = pile == 'royal' ? simulated.royalDeck : simulated.monsterDeck
+    if (deck.length == 0) break
+    const newDeck = deck.slice(1)
+    remaining = remaining - 1
+    simulated = {
+      ...simulated,
+      royalDeck: pile == 'royal' ? newDeck : simulated.royalDeck,
+      monsterDeck: pile == 'monster' ? newDeck : simulated.monsterDeck,
+      pendingChoice: remaining > 0
+        ? { type: 'openingHand', playerId: AI_PLAYER_ID, remaining }
+        : simulated.pendingChoice
+    }
+  }
+  return intents
+}
 
 export function pickAiTurn(state : GameState) : Intent[] {
   if (state.phase == 'gameover') return []
+
+  if (state.phase == 'opening_hand') {
+    const choice = state.pendingChoice
+    if (choice != null && choice.type == 'openingHand' && choice.playerId == AI_PLAYER_ID) {
+      return pickAiOpeningHandIntents(state)
+    }
+    return []
+  }
+
   const intents : Intent[] = []
 
   if (state.responseWindow != null && state.responseWindow.targetId == AI_PLAYER_ID) {
