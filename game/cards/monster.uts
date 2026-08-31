@@ -98,39 +98,33 @@ export const MONSTER_CARDS : CardDef[] = [
     tags: ['once_per_turn']
   },
   {
-    id: 'joker_girl',
-    name: '小丑女',
+    id: 'bomb_monster',
+    name: '炸弹怪',
     faction: 'monster',
+    // 官方：Lv.1 的扩展替换牌，打出后放置在「对手」场上，是个 debuff
     cardType: 'attack',
-    level: 4,
+    level: 1,
     emblem: 'none',
-    copyCount: 1,
+    copyCount: 2,
     freeAction: false,
-    effects: [{ kind: 'custom', handlerId: 'force_reveal_high' }],
-    tags: ['force_reveal']
+    effects: [{ kind: 'custom', handlerId: 'bomb_monster' }],
+    // 官方平替配比表（规则书最后一页）未公开，故不指定 replacesId
+    tags: ['place_on_opponent_field', 'prep_trigger', 'cannot_return_to_hand'],
+    isReplacement: true
   },
   {
-    id: 'madman',
-    name: '狂人',
+    id: 'dragon_whelp',
+    name: '龙幼崽',
     faction: 'monster',
+    // 官方：🔥纹章的扩展替换牌，红标攻击牌（可被圣骑士响应）
     cardType: 'attack',
-    level: 4,
-    emblem: 'none',
+    level: 0,
+    emblem: 'dragon',
     copyCount: 1,
     freeAction: false,
-    effects: [{ kind: 'custom', handlerId: 'force_reveal_high' }],
-    tags: ['force_reveal']
-  },
-  {
-    id: 'fire_dragon_girl',
-    name: '火龙女',
-    faction: 'monster',
-    cardType: 'attack',
-    level: 5,
-    emblem: 'none',
-    copyCount: 1,
-    freeAction: false,
-    effects: [{ kind: 'custom', handlerId: 'force_reveal_high' }],
-    tags: ['force_reveal']
+    effects: [{ kind: 'custom', handlerId: 'dragon_whelp' }],
+    // 官方平替配比表未公开，故不指定 replacesId
+    tags: ['return_field_to_hand'],
+    isReplacement: true
   }
 ]

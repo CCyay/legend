@@ -2,7 +2,7 @@ import type { GameState } from './types.uts'
 import { MAIN_ACTION_POINTS } from './types.uts'
 import { getCardDef } from './cards/catalog.uts'
 import { opponentId, getPlayer } from './cards/instance.uts'
-import { gainGold } from './setup.uts'
+import { gainGold, discardCard } from './setup.uts'
 
 export function startPrepPhase(state : GameState) : GameState {
   const player = getPlayer(state, state.activePlayerId)
@@ -48,7 +48,32 @@ export function startPrepPhase(state : GameState) : GameState {
   }
 
   if (next.phase == 'gameover') return next
+
+  next = releaseBombMonster(next, state.activePlayerId)
+
   return enterMainPhase(next)
+}
+
+/**
+ * 炸弹怪解除判定（官方 FAQ）：
+ * 炸弹怪放置在对手场上，其持有者准备阶段不能把它收回手牌（它非持续卡，本就不参与收回）；
+ * 当该玩家手牌达到 5 张时炸弹怪解除，立即弃置。
+ */
+function releaseBombMonster(state : GameState, playerId : string) : GameState {
+  const player = getPlayer(state, playerId)
+  if (player == null) return state
+  if (player.hand.length < 5) return state
+
+  const bombs = player.field.filter((c) : boolean => c.defId == 'bomb_monster')
+  let next = state
+  for (let i = 0; i < bombs.length; i++) {
+    next = discardCard(next, bombs[i])
+    next = {
+      ...next,
+      events: [...next.events, { tick: next.tick, type: 'bomb_released', message: '炸弹怪解除并弃置' }]
+    }
+  }
+  return next
 }
 
 export function enterMainPhase(state : GameState) : GameState {

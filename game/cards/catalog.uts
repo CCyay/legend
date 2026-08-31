@@ -45,13 +45,26 @@ export function getCopyCount(def : CardDef, playerCount : number) : number {
   return def.copyCount
 }
 
+/**
+ * 是否为默认进入牌库的基础牌。
+ * 官方实体牌分两刀：基础牌可直接开玩，右下角带红标的扩展牌需按提示卡平替后才启用。
+ */
+export function isBaseDeckCard(def : CardDef) : boolean {
+  return def.isReplacement != true
+}
+
+/** 扩展替换牌（红标），默认不进牌库 */
+export function getReplacementDefs() : CardDef[] {
+  return ALL_DEFS.filter((d) : boolean => d.isReplacement == true)
+}
+
 /** 具名卡 ID 列表，供 catalog 测试校验 */
 export const NAMED_CARD_IDS : string[] = [
   'king', 'princess', 'holy_grail', 'holy_sword', 'blacksmith', 'fighter',
-  'guard', 'nun', 'hero_lv4', 'hero_lv5', 'merchant', 'zenglu', 'wuniang',
+  'guard', 'nun', 'mage', 'hero_lv4', 'hero_lv5', 'berserker', 'merchant',
   'holy_knight', 'great_wizard',
   'dragon_egg', 'fire_dragon', 'fairy', 'goblin', 'white_bone', 'witch',
-  'dragon_flame', 'slime', 'joker_girl', 'madman', 'fire_dragon_girl',
+  'dragon_flame', 'slime', 'bomb_monster', 'dragon_whelp',
   'demon_lord', 'treasure_monster', 'black_knight', 'magic_sword'
 ]
 

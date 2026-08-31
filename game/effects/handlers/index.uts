@@ -25,9 +25,13 @@ export function resolveCardOnPlay(ctx : EffectContext) : GameState {
     case 'goblin':
       return startDeclareName(ctx.state, ctx.controllerId, ctx.source)
     case 'hero_lv4':
+    // 狂战士：官方裁定「此卡牌的名字也视作勇者」，共用勇者结算
+    case 'berserker':
       return startPlaceMonsterHand(ctx.state, ctx.controllerId, ctx.source, 4)
     case 'hero_lv5':
       return startPlaceMonsterHand(ctx.state, ctx.controllerId, ctx.source, 5)
+    case 'mage':
+      return startDeclareName(ctx.state, ctx.controllerId, ctx.source)
     case 'guard':
       return resolveGuard(ctx.state, ctx.controllerId, ctx.source)
     case 'witch':
@@ -38,17 +42,15 @@ export function resolveCardOnPlay(ctx : EffectContext) : GameState {
       return untapAllOpponentContinuous(ctx.state, ctx.controllerId)
     case 'merchant':
       return resolveMerchant(ctx.state, ctx.controllerId)
-    case 'zenglu':
-      return resolveZenglu(ctx.state, ctx.controllerId, ctx.source)
     case 'great_wizard':
       return {
         ...ctx.state,
         pendingChoice: { type: 'declareLevel', playerId: ctx.controllerId, levels: [0, 1, 2, 3, 4, 5, 6] }
       }
     case 'black_knight':
-    case 'joker_girl':
-    case 'madman':
-    case 'fire_dragon_girl':
+    // 炸弹怪与龙幼崽是红标攻击牌，官方确认可被圣骑士等触发牌响应
+    case 'bomb_monster':
+    case 'dragon_whelp':
       return openAttackResponse(ctx.state, ctx.controllerId, ctx.source)
     case 'princess':
     case 'king':
@@ -56,7 +58,6 @@ export function resolveCardOnPlay(ctx : EffectContext) : GameState {
     case 'holy_sword':
     case 'blacksmith':
     case 'fighter':
-    case 'wuniang':
     case 'dragon_egg':
     case 'fire_dragon':
     case 'fairy':
@@ -191,34 +192,134 @@ function startDeclareName(state : GameState, controllerId : PlayerId, source : C
   }
 }
 
+/**
+ * 勇者/狂战士打出：勇者先放置到自己场上（结算中），再请求选择对手的一张魔物手牌。
+ * 放置目标、效果判定、弃置勇者都在 resolvePickHand 里按顺序完成。
+ */
 function startPlaceMonsterHand(state : GameState, controllerId : PlayerId, source : CardInstance, level : number) : GameState {
   const oppId = opponentId(state, controllerId)
   const opp = getPlayer(state, oppId)
-  if (opp == null) return state
-  const monsters = opp.hand.filter((c) => {
+  if (opp == null) return discardCard(state, source)
+
+  const monsters = opp.hand.filter((c) : boolean => {
     const d = getCardDef(c.defId)
     return d != null && d.faction == 'monster'
   })
-  if (monsters.length == 0) return state
+  // 官方「完全执行」：对手无魔物手牌本就不该打出，兜底直接弃置
+  if (monsters.length == 0) return discardCard(state, source)
+
+  let next = removeFromHand(state, controllerId, source.instanceId)
+  next = addToField(next, controllerId, source)
   return {
-    ...state,
-    pendingChoice: { type: 'pickHand', playerId: controllerId, count: 1, filter: 'monster' }
+    ...next,
+    pendingChoice: {
+      type: 'pickHand',
+      playerId: controllerId,
+      targetPlayerId: oppId,
+      count: 1,
+      sourceInstanceId: source.instanceId,
+      filter: 'monster'
+    },
+    events: [...next.events, {
+      tick: next.tick,
+      type: 'hero_declared',
+      message: '勇者登场，选择对手的一张魔物手牌'
+    }]
   }
 }
 
-function resolveZenglu(state : GameState, controllerId : PlayerId, source : CardInstance) : GameState {
-  const candidates = state.royalDiscard.filter((c) => {
-    const d = getCardDef(c.defId)
-    return d != null && d.level > 1
-  })
-  if (candidates.length == 0) return state
-  const picked = candidates[candidates.length - 1]
-  const royalDiscard = state.royalDiscard.filter((c) => c.instanceId != picked.instanceId)
-  const players = state.players.map((p) => {
-    if (p.id != controllerId) return p
-    return { ...p, hand: [...p.hand, { ...picked, ownerId: controllerId }] }
-  })
-  return { ...state, royalDiscard, players }
+/**
+ * 消费 pickHand 选择。按来源卡分派结算。
+ * 勇者：放置魔物到对手场上 → 判定等级 → 最后弃置勇者。
+ */
+export function resolvePickHand(
+  state : GameState,
+  controllerId : PlayerId,
+  sourceInstanceId : string,
+  pickedInstanceId : string
+) : GameState {
+  const source = findInstance(state, sourceInstanceId)
+  const picked = findInstance(state, pickedInstanceId)
+  if (source == null || picked == null) return state
+
+  const sourceDef = getCardDef(source.defId)
+  const pickedDef = getCardDef(picked.defId)
+  if (sourceDef == null || pickedDef == null) return state
+
+  if (sourceDef.tags.includes('hero')) {
+    return resolveHeroPlacement(state, controllerId, source, sourceDef, picked, pickedDef)
+  }
+
+  // 其他来源卡暂未实现，清掉选择并弃置来源，避免卡死
+  return { ...discardCard(state, source), pendingChoice: null }
+}
+
+function resolveHeroPlacement(
+  state : GameState,
+  controllerId : PlayerId,
+  hero : CardInstance,
+  heroDef : import('../../types.uts').CardDef,
+  picked : CardInstance,
+  pickedDef : import('../../types.uts').CardDef
+) : GameState {
+  const oppId = opponentId(state, controllerId)
+
+  // 1. 把选中的魔物牌从对手手牌放置到对手自己的场上
+  let next = placeOnOpponentField(state, oppId, oppId, picked)
+  next = {
+    ...next,
+    events: [...next.events, {
+      tick: next.tick,
+      type: 'hero_place',
+      message: `【${pickedDef.name}】被放置到对手场上`
+    }]
+  }
+
+  // 2. 效果判定：被放置的牌等级低于此勇者时，勇者控制者获得 1 金
+  if (pickedDef.level < heroDef.level) {
+    next = gainGold(next, controllerId, 1)
+  }
+
+  // 3. 判定结束后才弃置勇者
+  next = discardCard(next, hero)
+  return {
+    ...next,
+    pendingChoice: null,
+    events: [...next.events, {
+      tick: next.tick,
+      type: 'hero_done',
+      message: `【${heroDef.name}】结算完毕，弃置`
+    }]
+  }
+}
+
+/**
+ * 炸弹怪：打出后放置到对手场上（不是自己场上）。
+ * 官方：对手准备阶段不能把它拿回手牌，且必须改为收回场上另一张牌；
+ * 对手手牌达到 5 张时炸弹怪解除并立即弃置。后两条为准备阶段逻辑，见 phases.uts。
+ */
+function resolveBombMonster(state : GameState, controllerId : PlayerId, source : CardInstance) : GameState {
+  const oppId = opponentId(state, controllerId)
+  return placeOnOpponentField(state, controllerId, oppId, source)
+}
+
+/**
+ * 龙幼崽：令目标场上的一张牌返回其手牌。
+ * 官方：由龙幼崽的「使用者」决定返回哪一张。
+ */
+function resolveDragonWhelp(state : GameState, controllerId : PlayerId, source : CardInstance) : GameState {
+  const oppId = opponentId(state, controllerId)
+  const opp = getPlayer(state, oppId)
+  if (opp == null || opp.field.length == 0) return discardCard(state, source)
+  return {
+    ...discardCard(state, source),
+    pendingChoice: {
+      type: 'pickField',
+      playerId: controllerId,
+      targetPlayerId: oppId,
+      count: 1
+    }
+  }
 }
 
 export function applyResolvedAttack(state : GameState, controllerId : PlayerId, inst : CardInstance) : GameState {
@@ -226,11 +327,17 @@ export function applyResolvedAttack(state : GameState, controllerId : PlayerId, 
   if (def == null) return discardCard(state, inst)
   switch (def.id) {
     case 'hero_lv4':
+    case 'berserker':
       return startPlaceMonsterHand(state, controllerId, inst, 4)
     case 'hero_lv5':
       return startPlaceMonsterHand(state, controllerId, inst, 5)
     case 'goblin':
+    case 'mage':
       return startDeclareName(state, controllerId, inst)
+    case 'bomb_monster':
+      return resolveBombMonster(state, controllerId, inst)
+    case 'dragon_whelp':
+      return resolveDragonWhelp(state, controllerId, inst)
     case 'merchant':
       return discardCard(resolveMerchant(state, controllerId), inst)
     case 'white_bone':
@@ -268,5 +375,32 @@ export function canPlayCard(state : GameState, playerId : PlayerId, instanceId :
     const hasEgg = me.field.some((c) => c.defId == 'dragon_egg')
     if (!hasEgg) return false
   }
+
+  // 官方「完全执行」原则：效果无法完整执行的牌不能打出
+  if (def.tags.includes('full_execution') && !canFullyExecute(state, playerId, def.id)) {
+    return false
+  }
+  return true
+}
+
+/** 判定带 full_execution 标记的卡当前能否完整结算 */
+function canFullyExecute(state : GameState, playerId : PlayerId, defId : string) : boolean {
+  const me = getPlayer(state, playerId)
+  const opp = getPlayer(state, opponentId(state, playerId))
+  if (me == null || opp == null) return false
+
+  // 勇者 / 狂战士：对手必须持有魔物手牌，否则无法放置
+  if (defId == 'hero_lv4' || defId == 'hero_lv5' || defId == 'berserker') {
+    return opp.hand.some((c) : boolean => {
+      const d = getCardDef(c.defId)
+      return d != null && d.faction == 'monster'
+    })
+  }
+
+  // 商人：对手必须金币多于自己且付得起 1 金
+  if (defId == 'merchant') {
+    return opp.gold > me.gold && opp.gold > 0
+  }
+
   return true
 }

@@ -5,7 +5,7 @@ import { findInstance, getPlayer } from './cards/instance.uts'
 import { createGame, drawFromPile, discardCard } from './setup.uts'
 import { enterEndPhase, spendActionPoint, finishEndPhase, enterMainPhase } from './phases.uts'
 import { applyWinCheck } from './win.uts'
-import { canPlayCard, resolveCardOnPlay, resolveGuard, applyResolvedAttack } from './effects/handlers/index.uts'
+import { canPlayCard, resolveCardOnPlay, resolveGuard, applyResolvedAttack, resolvePickHand } from './effects/handlers/index.uts'
 
 export function dispatch(state : GameState, intent : Intent) : DispatchResult {
   if (state.phase == 'gameover') {
@@ -25,9 +25,43 @@ export function dispatch(state : GameState, intent : Intent) : DispatchResult {
       return handleEndPhase(state, intent.playerId)
     case 'discard':
       return handleDiscard(state, intent.playerId, intent.instanceIds)
+    case 'selectTargets':
+      return handleSelectTargets(state, intent.playerId, intent.instanceIds)
     default:
       return { state, ok: false, error: '未知意图' }
   }
+}
+
+function handleSelectTargets(state : GameState, playerId : string, instanceIds : string[]) : DispatchResult {
+  const choice = state.pendingChoice
+  if (choice == null || choice.type != 'pickHand') {
+    return { state, ok: false, error: '无选牌请求' }
+  }
+  if (choice.playerId != playerId) {
+    return { state, ok: false, error: '未轮到你选择' }
+  }
+  if (instanceIds.length != choice.count) {
+    return { state, ok: false, error: '选择数量不正确' }
+  }
+
+  const target = getPlayer(state, choice.targetPlayerId)
+  if (target == null) return { state, ok: false, error: '目标玩家不存在' }
+
+  // 只能从目标玩家手牌中选，且需满足 filter（勇者只能选魔物牌）
+  for (let i = 0; i < instanceIds.length; i++) {
+    const picked = target.hand.find((c) : boolean => c.instanceId == instanceIds[i])
+    if (picked == null) return { state, ok: false, error: '所选卡牌不在对手手牌中' }
+    if (choice.filter != null) {
+      const def = getCardDef(picked.defId)
+      if (def == null || def.faction != choice.filter) {
+        return { state, ok: false, error: '所选卡牌不符合要求' }
+      }
+    }
+  }
+
+  let next = resolvePickHand(state, playerId, choice.sourceInstanceId, instanceIds[0])
+  next = applyWinCheck(next)
+  return { state: next, ok: true }
 }
 
 function handlePickOpeningHand(
@@ -132,7 +166,8 @@ function handlePlayCard(state : GameState, playerId : string, instanceId : strin
       next = { ...next, flags: { ...next.flags, slimePlayedThisTurn: true } }
     }
     if (def.cardType == 'attack') {
-      const directAttacks = ['slime', 'white_bone', 'dragon_flame', 'merchant', 'hero_lv4', 'hero_lv5', 'goblin', 'zenglu', 'great_wizard']
+      // 勇者/狂战士不在此列：它们要先上场、等玩家选牌、判定后才弃置（见 startPlaceMonsterHand）
+      const directAttacks = ['slime', 'white_bone', 'dragon_flame', 'merchant', 'goblin', 'mage', 'great_wizard']
       if (directAttacks.includes(def.id)) {
         next = removeCardFromHand(next, playerId, instanceId)
         next = applyResolvedAttack(next, playerId, inst)

@@ -9,15 +9,37 @@
       <text class="rule-line">触发卡可在被攻击时打出</text>
     </view>
     <button class="start-btn" type="primary" @click="onStart">开始游戏</button>
+
+    <button class="test-btn" @click="onRunTests">运行引擎自检</button>
+    <view v-if="summary.length > 0" class="test-result">
+      <text :class="passed ? 'test-pass' : 'test-fail'">{{ summary }}</text>
+      <text v-for="(err, i) in errors" :key="i" class="test-error">· {{ err }}</text>
+    </view>
   </view>
 </template>
 
 <script setup lang="uts">
+import { ref } from 'vue'
 import { startNewGame } from '@/store/game.uts'
+import { runAllGameTests } from '@/game/test-runner.uts'
 
 function onStart() {
   startNewGame(Date.now())
   uni.navigateTo({ url: '/pages/game/match/match' })
+}
+
+const summary = ref('')
+const passed = ref(false)
+const errors = ref<string[]>([])
+
+function onRunTests() {
+  const result = runAllGameTests()
+  passed.value = result.passed
+  errors.value = result.errors
+  summary.value = result.passed
+    ? `✅ 引擎自检全部通过`
+    : `❌ ${result.errors.length} 项失败`
+  console.log('[game tests]', result.passed ? 'PASS' : 'FAIL', result.errors)
 }
 </script>
 
@@ -52,5 +74,31 @@ function onStart() {
 }
 .start-btn {
   width: 80%;
+}
+.test-btn {
+  width: 80%;
+  margin-top: 12px;
+}
+.test-result {
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+}
+.test-pass {
+  font-size: 15px;
+  font-weight: bold;
+  color: #2e7d32;
+}
+.test-fail {
+  font-size: 15px;
+  font-weight: bold;
+  color: #c62828;
+}
+.test-error {
+  font-size: 13px;
+  color: #c62828;
+  line-height: 22px;
 }
 </style>

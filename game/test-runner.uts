@@ -1,7 +1,9 @@
-import { validateCatalog, NAMED_CARD_IDS, getCardDef } from './cards/catalog.uts'
+import { validateCatalog, NAMED_CARD_IDS, getCardDef, getReplacementDefs } from './cards/catalog.uts'
 import { createGame } from './setup.uts'
 import { dispatch } from './engine.uts'
 import { HUMAN_PLAYER_ID, AI_PLAYER_ID, INITIAL_HAND } from './types.uts'
+import { createInstance } from './cards/instance.uts'
+import { pickAiOpeningHandIntents } from './ai/opponent.uts'
 import type { GameState, DrawPile } from './types.uts'
 
 function autoPickOne(state : GameState, playerId : string) : GameState {
@@ -31,8 +33,8 @@ export function runCatalogTests() : string[] {
   const errors : string[] = []
   errors.push(...validateCatalog())
 
-  if (NAMED_CARD_IDS.length < 30) {
-    errors.push(`named cards count ${NAMED_CARD_IDS.length} < 30`)
+  if (NAMED_CARD_IDS.length < 29) {
+    errors.push(`named cards count ${NAMED_CARD_IDS.length} < 29`)
   }
 
   for (let i = 0; i < NAMED_CARD_IDS.length; i++) {
@@ -44,8 +46,20 @@ export function runCatalogTests() : string[] {
     if (def.id == 'princess' && !def.freeAction) {
       errors.push('princess should be freeAction')
     }
-    if (def.id == 'zenglu' && !def.freeAction) {
-      errors.push('zenglu should be freeAction')
+    // 官方 FAQ 校准的等级
+    if (def.id == 'blacksmith' && def.level != 0) {
+      errors.push(`blacksmith level ${def.level} != 0`)
+    }
+    if (def.id == 'merchant' && def.level != 1) {
+      errors.push(`merchant level ${def.level} != 1`)
+    }
+    if (def.id == 'mage' && def.level != 2) {
+      errors.push(`mage level ${def.level} != 2`)
+    }
+    // 狂战士是 Lv.4 勇者的替换牌，名字视作勇者
+    if (def.id == 'berserker') {
+      if (def.replacesId != 'hero_lv4') errors.push('berserker should replace hero_lv4')
+      if (!def.tags.includes('name_as_hero')) errors.push('berserker missing name_as_hero tag')
     }
   }
   return errors
@@ -59,7 +73,8 @@ export function runSetupTests() : string[] {
   if (created.phase != 'opening_hand') errors.push('should start in opening_hand')
   if (created.players[0].hand.length != 0) errors.push('p0 should have empty hand before pick')
   if (created.players[1].hand.length != 0) errors.push('p1 should have empty hand before pick')
-  if (created.removedEx.length != 5) errors.push('should remove 5 EX cards in 2p')
+  // EX 池共 6 张（皇室 2 + 魔物 4），每色随机注入 1 张，其余 4 张移出本局
+  if (created.removedEx.length != 4) errors.push(`should remove 4 EX cards in 2p, got ${created.removedEx.length}`)
 
   const state = completeOpeningHand(created)
 
@@ -68,17 +83,28 @@ export function runSetupTests() : string[] {
   if (state.players[1].hand.length != 3) errors.push('p1 should have 3 cards')
   if (state.activePlayerId != state.firstPlayerId) errors.push('active should be first player')
 
+  // 建库配比必须在起手抽牌「之前」检查：completeOpeningHand 会抽走 6 张，
+  // 抽到铁匠/格斗家就会让牌库计数变少，断言结果取决于洗牌运气。
   let royalBlacksmith = 0
-  for (let i = 0; i < state.royalDeck.length; i++) {
-    if (state.royalDeck[i] == 'blacksmith') royalBlacksmith++
+  for (let i = 0; i < created.royalDeck.length; i++) {
+    if (created.royalDeck[i] == 'blacksmith') royalBlacksmith++
   }
   if (royalBlacksmith != 3) errors.push(`blacksmith count ${royalBlacksmith} != 3`)
 
   let royalFighter = 0
-  for (let i = 0; i < state.royalDeck.length; i++) {
-    if (state.royalDeck[i] == 'fighter') royalFighter++
+  for (let i = 0; i < created.royalDeck.length; i++) {
+    if (created.royalDeck[i] == 'fighter') royalFighter++
   }
   if (royalFighter != 3) errors.push(`fighter count ${royalFighter} != 3`)
+
+  // 红标扩展替换牌不得进入默认牌库
+  const replacementIds = getReplacementDefs().map((d) : string => d.id)
+  for (let i = 0; i < replacementIds.length; i++) {
+    const rid = replacementIds[i]
+    if (created.royalDeck.includes(rid) || created.monsterDeck.includes(rid)) {
+      errors.push(`replacement card ${rid} should not be in deck`)
+    }
+  }
 
   const state2 = createGame(42, { playerCount: 2, humanFirst: true })
   if (created.royalDeck.join(',') != state2.royalDeck.join(',')) {
@@ -100,11 +126,132 @@ export function runEngineSmoke() : string[] {
   return errors
 }
 
+/**
+ * 勇者结算顺序：打出后先上场 → 选对手魔物手牌 → 放到对手场上 → 判定金币 → 最后弃置勇者
+ */
+export function runHeroFlowTests() : string[] {
+  const errors : string[] = []
+  let state = completeOpeningHand(createGame(7, { playerCount: 2, humanFirst: true }))
+
+  const hero = createInstance('hero_lv4', HUMAN_PLAYER_ID)
+  const goblin = createInstance('goblin', AI_PLAYER_ID)
+
+  state = {
+    ...state,
+    phase: 'main',
+    activePlayerId: HUMAN_PLAYER_ID,
+    actionPoints: 2,
+    players: state.players.map((p) => {
+      if (p.id == HUMAN_PLAYER_ID) return { ...p, gold: 0, hand: [hero], field: [] }
+      return { ...p, gold: 0, hand: [goblin], field: [] }
+    })
+  }
+
+  const played = dispatch(state, {
+    type: 'playCard',
+    playerId: HUMAN_PLAYER_ID,
+    instanceId: hero.instanceId
+  })
+  if (!played.ok) errors.push(`hero should be playable: ${played.error ?? ''}`)
+  state = played.state
+
+  // 阶段一：勇者应在自己场上，尚未弃置，并请求选牌
+  const humanMid = state.players.find((p) => p.id == HUMAN_PLAYER_ID)
+  if (humanMid == null || !humanMid.field.some((c) : boolean => c.instanceId == hero.instanceId)) {
+    errors.push('hero should be on own field while resolving')
+  }
+  if (state.royalDiscard.some((c) : boolean => c.instanceId == hero.instanceId)) {
+    errors.push('hero should not be discarded before resolution')
+  }
+  const choice = state.pendingChoice
+  if (choice == null || choice.type != 'pickHand') {
+    errors.push('hero should request a pickHand choice')
+    return errors
+  }
+  if (choice.targetPlayerId != AI_PLAYER_ID) errors.push('pickHand target should be opponent')
+
+  // 阶段二：选定后放置、判定、弃置
+  const picked = dispatch(state, {
+    type: 'selectTargets',
+    playerId: HUMAN_PLAYER_ID,
+    instanceIds: [goblin.instanceId]
+  })
+  if (!picked.ok) errors.push(`selectTargets should succeed: ${picked.error ?? ''}`)
+  state = picked.state
+
+  const aiAfter = state.players.find((p) => p.id == AI_PLAYER_ID)
+  if (aiAfter == null || !aiAfter.field.some((c) : boolean => c.instanceId == goblin.instanceId)) {
+    errors.push('picked monster should be placed on opponent field')
+  }
+  if (aiAfter != null && aiAfter.hand.some((c) : boolean => c.instanceId == goblin.instanceId)) {
+    errors.push('picked monster should leave opponent hand')
+  }
+
+  const humanAfter = state.players.find((p) => p.id == HUMAN_PLAYER_ID)
+  // 哥布林 Lv.1 < 勇者 Lv.4，应得 1 金
+  if (humanAfter == null || humanAfter.gold != 1) {
+    errors.push(`hero should grant 1 gold, got ${humanAfter?.gold ?? -1}`)
+  }
+  if (humanAfter != null && humanAfter.field.some((c) : boolean => c.instanceId == hero.instanceId)) {
+    errors.push('hero should leave field after resolution')
+  }
+  if (!state.royalDiscard.some((c) : boolean => c.instanceId == hero.instanceId)) {
+    errors.push('hero should be discarded after resolution')
+  }
+  if (state.pendingChoice != null) errors.push('pendingChoice should be cleared')
+
+  return errors
+}
+
+/**
+ * AI 起手选牌必须真随机：曾因每次调用都用相同种子 new SeededRng，
+ * 导致同一轮 3 次抽牌必定落在同一个牌库（表现为「永远选皇室」）。
+ */
+export function runAiOpeningTests() : string[] {
+  const errors : string[] = []
+  let sawRoyal = false
+  let sawMonster = false
+  let sawMixedInOneGame = false
+
+  for (let s = 1; s <= 20; s++) {
+    let state = createGame(s * 1000 + 7, { playerCount: 2, humanFirst: true })
+    for (let i = 0; i < INITIAL_HAND; i++) {
+      state = autoPickOne(state, HUMAN_PLAYER_ID)
+    }
+
+    const intents = pickAiOpeningHandIntents(state)
+    if (intents.length != INITIAL_HAND) {
+      errors.push(`seed ${s}: AI produced ${intents.length} opening intents, expected ${INITIAL_HAND}`)
+      continue
+    }
+
+    let royal = 0
+    let monster = 0
+    for (let i = 0; i < intents.length; i++) {
+      const it = intents[i]
+      if (it.type != 'pickOpeningHand') continue
+      if (it.pile == 'royal') royal++
+      else monster++
+    }
+    if (royal > 0) sawRoyal = true
+    if (monster > 0) sawMonster = true
+    if (royal > 0 && monster > 0) sawMixedInOneGame = true
+  }
+
+  if (!sawRoyal) errors.push('AI never picked the royal deck across 20 seeds')
+  if (!sawMonster) errors.push('AI never picked the monster deck across 20 seeds')
+  if (!sawMixedInOneGame) errors.push('AI never mixed factions within a single opening hand')
+
+  return errors
+}
+
 export function runAllGameTests() : { passed : boolean; errors : string[] } {
   const errors = [
     ...runCatalogTests(),
     ...runSetupTests(),
-    ...runEngineSmoke()
+    ...runEngineSmoke(),
+    ...runHeroFlowTests(),
+    ...runAiOpeningTests()
   ]
   return { passed: errors.length == 0, errors }
 }

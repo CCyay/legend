@@ -5,7 +5,7 @@ import {
 import { SeededRng } from './rng.uts'
 import {
   getRoyalBaseDefs, getMonsterBaseDefs, getRoyalExIds, getMonsterExIds,
-  getCopyCount, getCardDef
+  getCopyCount, getCardDef, isBaseDeckCard
 } from './cards/catalog.uts'
 import { resetInstanceCounter, createInstance } from './cards/instance.uts'
 
@@ -19,6 +19,8 @@ export function buildDeckIds(faction : 'royal' | 'monster', playerCount : number
   const ids : string[] = []
   for (let i = 0; i < baseDefs.length; i++) {
     const def = baseDefs[i]
+    // 红标扩展牌不进默认牌库，需玩家按官方提示卡平替后才启用
+    if (!isBaseDeckCard(def)) continue
     const count = getCopyCount(def, playerCount)
     for (let c = 0; c < count; c++) {
       ids.push(def.id)
@@ -155,16 +157,23 @@ export function addToField(state : GameState, playerId : string, instance : impo
   return { ...state, players }
 }
 
+/**
+ * 将 ownerId 手牌中的一张牌放置到 targetPlayerId 的场上。
+ * ownerId 与 targetPlayerId 可以相同（如勇者把对手的魔物手牌放到对手自己场上），
+ * 因此两个分支必须都生效，不能命中一个就提前返回。
+ */
 export function placeOnOpponentField(state : GameState, ownerId : string, targetPlayerId : string, instance : import('./types.uts').CardInstance) : GameState {
   const placed = { ...instance, ownerId: targetPlayerId, tapped: true }
   const players = state.players.map((p) => {
+    let hand = p.hand
+    let field = p.field
     if (p.id == ownerId) {
-      return { ...p, hand: p.hand.filter((c) => c.instanceId != instance.instanceId) }
+      hand = hand.filter((c) => c.instanceId != instance.instanceId)
     }
     if (p.id == targetPlayerId) {
-      return { ...p, field: [...p.field, placed] }
+      field = [...field, placed]
     }
-    return p
+    return { ...p, hand, field }
   })
   return { ...state, players }
 }

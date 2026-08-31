@@ -4,8 +4,11 @@ import { getCardDef } from '../cards/catalog.uts'
 import { canPlayCard } from '../effects/handlers/index.uts'
 import { SeededRng } from '../rng.uts'
 
-export function chooseOpeningPile(state : GameState) : DrawPile | null {
-  const rng = new SeededRng(state.seed + state.tick + state.players.find((p) => p.id == AI_PLAYER_ID)!.hand.length)
+/**
+ * 选一个牌库抽起手牌。rng 由调用方传入并跨多次抽牌复用——
+ * 若在此处 new SeededRng，同一轮起手的每次调用种子相同，三张必定选到同一牌库。
+ */
+export function chooseOpeningPile(state : GameState, rng : SeededRng) : DrawPile | null {
   const royalLen = state.royalDeck.length
   const monsterLen = state.monsterDeck.length
   if (royalLen == 0 && monsterLen == 0) return null
@@ -22,8 +25,11 @@ export function pickAiOpeningHandIntents(state : GameState) : Intent[] {
   if (choice == null || choice.type != 'openingHand') return intents
   let remaining = choice.remaining
 
+  // 整轮起手共用一个 rng，逐次取值，保证 3 次抽牌相互独立
+  const rng = new SeededRng(state.seed + state.tick * 31 + remaining)
+
   while (remaining > 0) {
-    const pile = chooseOpeningPile(simulated)
+    const pile = chooseOpeningPile(simulated, rng)
     if (pile == null) break
     intents.push({
       type: 'pickOpeningHand',
@@ -46,8 +52,47 @@ export function pickAiOpeningHandIntents(state : GameState) : Intent[] {
   return intents
 }
 
+/**
+ * 从目标玩家手牌中挑选。勇者场景下优先选等级最低的牌，
+ * 因为「被放置牌等级低于勇者」才能拿到那 1 枚金币。
+ */
+function pickAiHandSelection(
+  state : GameState,
+  targetPlayerId : string,
+  count : number,
+  filter : string | null
+) : Intent[] {
+  const target = state.players.find((p) => p.id == targetPlayerId)
+  if (target == null) return []
+
+  const candidates = target.hand.filter((c) : boolean => {
+    if (filter == null) return true
+    const def = getCardDef(c.defId)
+    return def != null && def.faction == filter
+  })
+  if (candidates.length < count) return []
+
+  const sorted = candidates.slice().sort((a, b) : number => {
+    const da = getCardDef(a.defId)
+    const db = getCardDef(b.defId)
+    return (da?.level ?? 99) - (db?.level ?? 99)
+  })
+
+  return [{
+    type: 'selectTargets',
+    playerId: AI_PLAYER_ID,
+    instanceIds: sorted.slice(0, count).map((c) : string => c.instanceId)
+  }]
+}
+
 export function pickAiTurn(state : GameState) : Intent[] {
   if (state.phase == 'gameover') return []
+
+  // 待 AI 做的选牌请求（如勇者选择对手魔物手牌）优先处理，否则对局会卡住
+  const pending = state.pendingChoice
+  if (pending != null && pending.type == 'pickHand' && pending.playerId == AI_PLAYER_ID) {
+    return pickAiHandSelection(state, pending.targetPlayerId, pending.count, pending.filter ?? null)
+  }
 
   if (state.phase == 'opening_hand') {
     const choice = state.pendingChoice

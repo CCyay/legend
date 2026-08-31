@@ -40,6 +40,10 @@ export type CardDef = {
   freeAction : boolean
   effects : EffectDef[]
   tags : string[]
+  /** 扩展替换牌（实体牌右下角红标）。默认不进牌库，需按提示卡平替基础牌后启用 */
+  isReplacement ?: boolean
+  /** 该替换牌平替的基础牌 id；官方配比表未公开的填 null */
+  replacesId ?: string
 }
 
 export type CardInstance = {
@@ -110,7 +114,8 @@ export type ResponseWindow = {
 export type PendingChoice =
   | { type : 'openingHand'; playerId : PlayerId; remaining : number }
   | { type : 'discard'; playerId : PlayerId; count : number; selected : string[] }
-  | { type : 'pickHand'; playerId : PlayerId; count : number; filter ?: string }
+  // playerId=做选择的人；targetPlayerId=被选手牌的人；sourceInstanceId=发起此选择的卡（结算完才弃置）
+  | { type : 'pickHand'; playerId : PlayerId; targetPlayerId : PlayerId; count : number; sourceInstanceId : string; filter ?: string }
   | { type : 'pickField'; playerId : PlayerId; targetPlayerId : PlayerId; count : number }
   | { type : 'declareLevel'; playerId : PlayerId; levels : number[] }
   | { type : 'declareName'; playerId : PlayerId; names : string[] }

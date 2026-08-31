@@ -47,20 +47,23 @@ export const ROYAL_CARDS : CardDef[] = [
     copyCount: 1,
     freeAction: false,
     effects: [{ kind: 'custom', handlerId: 'holy_sword' }],
-    tags: []
+    // 官方裁定：扩大勇者攻击范围（手牌 → 场上魔物牌），且只能给自己的勇者用
+    tags: ['hero_buff', 'self_only']
   },
   {
     id: 'blacksmith',
     name: '铁匠',
     faction: 'royal',
+    // 官方 FAQ 明确为 Lv.0（原实现误记为 Lv.2）
     cardType: 'continuous',
-    level: 2,
+    level: 0,
     emblem: 'none',
     copyCount: 4,
     twoPlayerCopyCount: 3,
     freeAction: false,
     effects: [{ kind: 'custom', handlerId: 'blacksmith' }],
-    tags: ['active_ability']
+    // 官方：效果是「展示手牌」，被展示的牌不发动效果
+    tags: ['active_ability', 'reveal_hand']
   },
   {
     id: 'fighter',
@@ -100,16 +103,31 @@ export const ROYAL_CARDS : CardDef[] = [
     tags: ['on_opponent_discard']
   },
   {
+    id: 'mage',
+    name: '法师',
+    faction: 'royal',
+    // 官方 FAQ：Lv.2 法师，宣言对手手牌「没有」什么，对手有一次机会亮牌说「我有」
+    cardType: 'attack',
+    level: 2,
+    emblem: 'none',
+    copyCount: 2,
+    freeAction: false,
+    effects: [{ kind: 'custom', handlerId: 'mage' }],
+    tags: ['declare_absence']
+  },
+  {
     id: 'hero_lv4',
     name: '勇者',
     faction: 'royal',
+    // 注：官方勇者有 Lv.4 / Lv.5 / 👑纹章 三个版本，👑版效果未采集，暂未录入
     cardType: 'attack',
     level: 4,
     emblem: 'none',
     copyCount: 4,
     freeAction: false,
     effects: [{ kind: 'custom', handlerId: 'hero_lv4' }],
-    tags: ['hero']
+    // 官方：必须满足「完全执行」才能打出（对手无手牌或无魔物牌时不可打出）
+    tags: ['hero', 'full_execution']
   },
   {
     id: 'hero_lv5',
@@ -118,45 +136,38 @@ export const ROYAL_CARDS : CardDef[] = [
     cardType: 'attack',
     level: 5,
     emblem: 'none',
-    copyCount: 2,
+    copyCount: 1,
     freeAction: false,
     effects: [{ kind: 'custom', handlerId: 'hero_lv5' }],
-    tags: ['hero', 'boss_emblem_target']
+    tags: ['hero', 'full_execution', 'boss_emblem_target']
+  },
+  {
+    id: 'berserker',
+    name: '狂战士',
+    faction: 'royal',
+    // 官方：Lv.4 勇者的扩展替换牌，「此卡牌的名字也视作勇者」
+    cardType: 'attack',
+    level: 4,
+    emblem: 'none',
+    copyCount: 4,
+    freeAction: false,
+    effects: [{ kind: 'custom', handlerId: 'hero_lv4' }],
+    tags: ['hero', 'full_execution', 'name_as_hero'],
+    isReplacement: true,
+    replacesId: 'hero_lv4'
   },
   {
     id: 'merchant',
     name: '商人',
     faction: 'royal',
+    // 官方 FAQ 明确为 Lv.1（原实现误记为 Lv.3）
     cardType: 'attack',
-    level: 3,
+    level: 1,
     emblem: 'none',
     copyCount: 2,
     freeAction: false,
     effects: [{ kind: 'custom', handlerId: 'merchant' }],
-    tags: []
-  },
-  {
-    id: 'zenglu',
-    name: '曾吕',
-    faction: 'royal',
-    cardType: 'attack',
-    level: 2,
-    emblem: 'none',
-    copyCount: 2,
-    freeAction: true,
-    effects: [{ kind: 'custom', handlerId: 'zenglu' }],
-    tags: ['special_no_ap']
-  },
-  {
-    id: 'wuniang',
-    name: '五娘',
-    faction: 'royal',
-    cardType: 'continuous',
-    level: 2,
-    emblem: 'none',
-    copyCount: 2,
-    freeAction: false,
-    effects: [{ kind: 'custom', handlerId: 'wuniang' }],
-    tags: ['on_opponent_gold']
+    // 官方：对手付不起金币 = 无法完全执行，商人不能打出
+    tags: ['full_execution']
   }
 ]
