@@ -9,44 +9,20 @@ export function startPrepPhase(state : GameState) : GameState {
   if (player == null) return state
 
   let next = { ...state, phase: 'prep' as const, flags: { ...state.flags, slimePlayedThisTurn: false } }
-  const returnedCards : import('./types.uts').CardInstance[] = []
 
   const players = next.players.map((p) => {
     if (p.id != state.activePlayerId) return p
-    const fieldCards = p.field.filter((c) => {
-      const def = getCardDef(c.defId)
-      return def != null && def.cardType == 'continuous'
-    })
-    returnedCards.push(...fieldCards)
-    const remaining = p.field.filter((c) => {
-      const def = getCardDef(c.defId)
-      return def == null || def.cardType != 'continuous'
-    })
+    const returned = p.field.filter((c) : boolean => canReturnToHandOnPrep(c.defId))
+    const remaining = p.field.filter((c) : boolean => !canReturnToHandOnPrep(c.defId))
     return {
       ...p,
-      hand: [...p.hand, ...fieldCards.map((c) => ({ ...c, tapped: false }))],
+      hand: [...p.hand, ...returned.map((c) => ({ ...c, tapped: false }))],
       field: remaining
     }
   })
   next = { ...next, players }
 
-  if (returnedCards.length >= 2) {
-    next = gainGold(next, state.activePlayerId, 1)
-  }
-
-  for (let i = 0; i < returnedCards.length; i++) {
-    const def = getCardDef(returnedCards[i].defId)
-    if (def != null && def.id == 'princess') {
-      next = gainGold(next, state.activePlayerId, 1)
-    }
-    if (def != null && def.id == 'holy_grail') {
-      const p = getPlayer(next, state.activePlayerId)
-      if (p != null && p.gold == 4) {
-        next = { ...next, winnerId: state.activePlayerId, phase: 'gameover' }
-      }
-    }
-  }
-
+  next = resolvePrepTriggers(next, state.activePlayerId)
   if (next.phase == 'gameover') return next
 
   next = releaseBombMonster(next, state.activePlayerId)
@@ -55,8 +31,48 @@ export function startPrepPhase(state : GameState) : GameState {
 }
 
 /**
+ * 准备阶段拿回手牌的判定：
+ * 持续牌（∞）留在场上继续生效，不参与收回；
+ * 炸弹怪带 cannot_return_to_hand，官方规定持有者不能把它拿回手牌；
+ * 卡表里查不到的牌一律留场，避免误删。
+ */
+function canReturnToHandOnPrep(defId : string) : boolean {
+  const def = getCardDef(defId)
+  if (def == null) return false
+  if (def.cardType == 'continuous') return false
+  if (def.tags.includes('cannot_return_to_hand')) return false
+  return true
+}
+
+/**
+ * 准备阶段效果结算。公主、圣杯都是持续牌，现在留在场上，
+ * 所以触发条件是「该牌在自己场上」，而不再是「被收回手牌」。
+ */
+function resolvePrepTriggers(state : GameState, playerId : string) : GameState {
+  const player = getPlayer(state, playerId)
+  if (player == null) return state
+
+  let next = state
+  for (let i = 0; i < player.field.length; i++) {
+    const def = getCardDef(player.field[i].defId)
+    if (def == null || !def.tags.includes('prep_trigger')) continue
+
+    if (def.id == 'princess') {
+      next = gainGold(next, playerId, 1)
+    }
+    if (def.id == 'holy_grail') {
+      const p = getPlayer(next, playerId)
+      if (p != null && p.gold == 4) {
+        return { ...next, winnerId: playerId, phase: 'gameover' }
+      }
+    }
+  }
+  return next
+}
+
+/**
  * 炸弹怪解除判定（官方 FAQ）：
- * 炸弹怪放置在对手场上，其持有者准备阶段不能把它收回手牌（它非持续卡，本就不参与收回）；
+ * 炸弹怪放置在对手场上，其持有者准备阶段不能把它收回手牌（由 cannot_return_to_hand 排除）；
  * 当该玩家手牌达到 5 张时炸弹怪解除，立即弃置。
  */
 function releaseBombMonster(state : GameState, playerId : string) : GameState {

@@ -157,8 +157,9 @@ export function pickAiTurn(state : GameState) : Intent[] {
     const choice = state.pendingChoice
     if (choice.type == 'discard' && choice.playerId == AI_PLAYER_ID) {
       const ai = state.players.find((p) => p.id == AI_PLAYER_ID)
-      if (ai != null && ai.hand.length > 4) {
-        const toDiscard = ai.hand.slice(0, ai.hand.length - 4).map((c) => c.instanceId)
+      // 张数必须严格等于 choice.count，否则 handleDiscard 会拒绝，AI 就卡在结束阶段
+      if (ai != null && choice.count > 0 && ai.hand.length >= choice.count) {
+        const toDiscard = ai.hand.slice(0, choice.count).map((c) : string => c.instanceId)
         intents.push({ type: 'discard', playerId: AI_PLAYER_ID, instanceIds: toDiscard })
       }
     }

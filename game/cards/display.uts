@@ -14,7 +14,16 @@ export type CardDisplayInfo = {
   emblemLabel : string
   description : string
   freeAction : boolean
+  /** 等级栏展示的是纹章而非数字 Lv，供 UI 做区分样式 */
+  isEmblemLevel : boolean
 }
+
+/**
+ * 官方数字等级只到 Lv.5；纹章是高于 Lv.5 的独立等级（纹章之间平级），
+ * 实体牌上印的是纹章符号而不是数字。卡表内部用 level 6 编码「纹章级」以便比较大小，
+ * 展示时必须还原成纹章，不能出现 Lv.6。
+ */
+const EMBLEM_LEVEL = 6
 
 export function getCardDisplayByDefId(defId : string) : CardDisplayInfo | null {
   const def = getCardDef(defId)
@@ -24,7 +33,16 @@ export function getCardDisplayByDefId(defId : string) : CardDisplayInfo | null {
 
 export function buildCardDisplay(def : CardDef) : CardDisplayInfo {
   const emblem = getEmblemLabel(def.emblem)
-  const levelText = `LV${def.level}`
+  const isEmblemLevel = def.level >= EMBLEM_LEVEL
+  // 纹章级的牌：等级栏改印纹章名；纹章已占了等级栏，就不再重复挂一个纹章标签。
+  // 圣骑士(Lv.5+👑)、龙幼崽(Lv.0+🔥)这类「有数字等级又带纹章标记」的牌不走这条分支，
+  // 仍是「LV5 + 皇冠」并列显示。
+  let levelText = `LV${def.level}`
+  let emblemLabel = emblem
+  if (isEmblemLevel) {
+    levelText = emblem != '' ? emblem : '纹章'
+    emblemLabel = ''
+  }
   return {
     id: def.id,
     name: def.name,
@@ -32,8 +50,9 @@ export function buildCardDisplay(def : CardDef) : CardDisplayInfo {
     levelText,
     typeLabel: getCardTypeLabel(def.cardType),
     typeIcon: getCardTypeIcon(def.cardType),
-    emblemLabel: emblem,
+    emblemLabel,
     description: getCardDescription(def.id),
-    freeAction: def.freeAction
+    freeAction: def.freeAction,
+    isEmblemLevel
   }
 }

@@ -11,10 +11,11 @@
     ]"
     @click="onTap">
     <view class="card-face__header">
-      <text class="card-face__level">{{ info!.levelText }}</text>
+      <text
+        class="card-face__level"
+        :class="info!.isEmblemLevel ? 'card-face__level--emblem' : ''">{{ info!.levelText }}</text>
       <text class="card-face__type">{{ info!.typeIcon }}{{ info!.typeLabel }}</text>
       <text v-if="info!.emblemLabel != ''" class="card-face__emblem">{{ info!.emblemLabel }}</text>
-      <text v-if="info!.freeAction" class="card-face__free">免费</text>
     </view>
     <text class="card-face__name">{{ info!.name }}</text>
     <text v-if="preview" class="card-face__desc">{{ info!.description }}</text>
@@ -127,6 +128,13 @@ function onTap() {
   color: #333;
   margin-right: 6px;
 }
+/* 纹章级：高于 Lv.5 的独立等级，做成徽标以区别于数字等级 */
+.card-face__level--emblem {
+  color: #7b4b00;
+  background-color: #ffd54f;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
 .card-face__type {
   font-size: 11px;
   color: #555;
@@ -136,13 +144,6 @@ function onTap() {
   font-size: 10px;
   color: #888;
   margin-right: 4px;
-}
-.card-face__free {
-  font-size: 10px;
-  color: #e65100;
-  background-color: #ffe0b2;
-  padding: 1px 4px;
-  border-radius: 4px;
 }
 .card-face__name {
   font-size: 13px;

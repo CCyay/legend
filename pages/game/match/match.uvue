@@ -159,23 +159,49 @@
     <view v-if="pickHandCandidates.length > 0" class="pick-overlay">
       <view class="pick-modal">
         <text class="pick-modal__title">{{ pickHandTitle }}</text>
-        <text class="pick-modal__hint">选中的牌将被放置到对手场上</text>
+        <text class="pick-modal__hint">盲选：只能看到牌背，选中的牌将被放置到对手场上</text>
         <scroll-view class="pick-modal-scroll" scroll-y="true" :show-scrollbar="true">
           <view class="pick-modal-grid">
             <view
-              v-for="card in pickHandCandidates"
+              v-for="(card, index) in pickHandCandidates"
               :key="card.instanceId"
               class="pick-card-wrap"
               @click="onPickHandCard(card.instanceId)">
-              <card-face :def-id="card.defId" :compact="true" />
+              <card-back :def-id="card.defId" />
+              <text class="pick-card-index">第 {{ index + 1 }} 张</text>
             </view>
           </view>
         </scroll-view>
       </view>
     </view>
 
+    <!-- 结束阶段：手牌超过上限，须弃牌后才能把回合交给对手 -->
+    <view v-if="discardChoiceCount > 0" class="pick-overlay">
+      <view class="pick-modal">
+        <text class="pick-modal__title">手牌超过 4 张，请弃置 {{ discardChoiceCount }} 张</text>
+        <text class="pick-modal__hint">已选 {{ discardSelection.length }} / {{ discardChoiceCount }}</text>
+        <scroll-view class="pick-modal-scroll" scroll-y="true" :show-scrollbar="true">
+          <view class="pick-modal-grid">
+            <view
+              v-for="card in human?.hand"
+              :key="card.instanceId"
+              class="pick-card-wrap"
+              :class="{ 'pick-card-wrap--selected': isDiscardSelected(card.instanceId) }"
+              @click="toggleDiscardSelection(card.instanceId)">
+              <card-face :def-id="card.defId" :compact="true" />
+            </view>
+          </view>
+        </scroll-view>
+        <button
+          size="mini"
+          type="warn"
+          :disabled="discardSelection.length != discardChoiceCount"
+          @click="confirmDiscard">确认弃牌</button>
+      </view>
+    </view>
+
     <!-- 手牌详情预览 -->
-    <view v-if="cardPreviewDefId != ''" class="card-preview-overlay" @click="closeCardPreview">
+    <view v-if="cardPreviewDefId != ''" class="card-preview-overlay" @click="onCardPreviewOverlayTap">
       <view class="card-preview-modal" @click.stop="">
         <card-face :def-id="cardPreviewDefId" :preview="true" />
         <text class="card-preview-hint">{{ cardPreviewHint }}</text>
@@ -225,6 +251,11 @@
         <text class="opening-status">起手选牌</text>
         <text class="opening-status-hint">自选牌库抽牌，共 3 次</text>
       </view>
+      <!-- 结束阶段弃牌未完成时，所有按钮都是禁用的，必须明确告诉玩家在等什么 -->
+      <view v-else-if="discardChoiceCount > 0" class="action-stack">
+        <text class="opening-status">需要弃牌</text>
+        <text class="opening-status-hint">手牌超过 4 张，请弃置 {{ discardChoiceCount }} 张后回合才会交给 AI</text>
+      </view>
       <view v-else class="action-stack">
         <view class="discard-actions">
           <button size="mini" @click="openDiscardPanel('royal')">皇室弃 {{ royalDiscardCount }}</button>
@@ -241,7 +272,7 @@
 </template>
 
 <script setup lang="uts">
-import { computed, onMounted, reactive } from 'vue'
+import { computed, onMounted, reactive, watch } from 'vue'
 import { gameState, sendIntent, getHumanPlayer, getAiPlayer, startNewGame } from '@/store/game.uts'
 import { HUMAN_PLAYER_ID, AI_PLAYER_ID } from '@/game/types.uts'
 import type { CardInstance, DrawPile } from '@/game/types.uts'
@@ -309,7 +340,13 @@ const aiFieldTrackWidth = computed(() => trackWidthPx(88, ai.value?.field.length
 const uiState = reactive({
   discardPanel: 'none',
   cardPreviewDefId: '',
-  previewContext: 'hand'
+  previewContext: 'hand',
+  // 预览刚打开时的点透守卫，见 openCardPreview
+  previewGuard: false,
+  // 盲选弹层刚出现时的点透守卫，见下方 watch
+  pickGuard: false,
+  // 结束阶段弃牌时玩家已勾选的手牌
+  discardSelection: [] as string[]
 })
 
 const dragUi = reactive({
@@ -326,6 +363,9 @@ const dragUi = reactive({
 })
 
 const DRAG_THRESHOLD = 10
+
+/** runAiIfNeeded 的推进轮数上限，纯粹是死循环兜底 */
+const AI_LOOP_LIMIT = 50
 
 const discardPanel = computed(() => uiState.discardPanel)
 const cardPreviewDefId = computed(() => uiState.cardPreviewDefId)
@@ -379,7 +419,56 @@ const pickHandTitle = computed(() => {
   return `【${name}】：选择对手的 ${c.count} 张手牌`
 })
 
+// 勇者等牌是拖拽打出的，弹层会紧接着渲染在松手的位置上，随后补发的那次 click
+// 会落到某张牌背上直接替玩家选牌。弹层出现后短暂忽略点击。
+watch(() => pickHandCandidates.value.length > 0, (open : boolean) => {
+  if (!open) {
+    uiState.pickGuard = false
+    return
+  }
+  uiState.pickGuard = true
+  setTimeout(() => {
+    uiState.pickGuard = false
+  }, 300)
+})
+
+/** 结束阶段手牌超过上限时，玩家需要弃掉的张数（0 表示当前不需要弃牌） */
+const discardChoiceCount = computed((): number => {
+  const g = gameState.game
+  const c = g?.pendingChoice
+  if (g == null || c == null || c.type != 'discard' || c.playerId != HUMAN_PLAYER_ID) return 0
+  return c.count
+})
+
+const discardSelection = computed((): string[] => uiState.discardSelection)
+
+function isDiscardSelected(instanceId : string) : boolean {
+  return uiState.discardSelection.includes(instanceId)
+}
+
+function toggleDiscardSelection(instanceId : string) {
+  const cur = uiState.discardSelection
+  if (cur.includes(instanceId)) {
+    uiState.discardSelection = cur.filter((id) : boolean => id != instanceId)
+    return
+  }
+  if (cur.length >= discardChoiceCount.value) return
+  uiState.discardSelection = [...cur, instanceId]
+}
+
+function confirmDiscard() {
+  if (uiState.discardSelection.length != discardChoiceCount.value) return
+  sendIntent({
+    type: 'discard',
+    playerId: HUMAN_PLAYER_ID,
+    instanceIds: uiState.discardSelection
+  })
+  uiState.discardSelection = []
+  runAiIfNeeded()
+}
+
 function onPickHandCard(instanceId : string) {
+  if (uiState.pickGuard) return
   sendIntent({
     type: 'selectTargets',
     playerId: HUMAN_PLAYER_ID,
@@ -427,11 +516,23 @@ function closeDiscardPanel() {
 function openCardPreview(defId : string, context : string = 'hand') {
   uiState.cardPreviewDefId = defId
   uiState.previewContext = context
+  // 预览是在 touchend / mouseup 里打开的，随后补发的那次 click 会落在刚渲染出来的
+  // 全屏遮罩上（点透），导致弹层闪一下就关闭。这里开一个短暂窗口忽略遮罩点击。
+  uiState.previewGuard = true
+  setTimeout(() => {
+    uiState.previewGuard = false
+  }, 300)
 }
 
 function closeCardPreview() {
   uiState.cardPreviewDefId = ''
   uiState.previewContext = 'hand'
+  uiState.previewGuard = false
+}
+
+function onCardPreviewOverlayTap() {
+  if (uiState.previewGuard) return
+  closeCardPreview()
 }
 
 function onOpeningPick(pile : string) {
@@ -616,11 +717,28 @@ function passResponse() {
   runAiIfNeeded()
 }
 
+/**
+ * AI 的一个回合要跨多轮决策：主要阶段抽牌/出牌 → 结束阶段弃牌 → 下一轮的响应窗口。
+ * pickAiTurn 每次只给出一轮意图，必须循环推进，否则 AI 抽完牌就会卡在自己的结束阶段。
+ * 退出条件只看引擎是否接受了意图（sendIntent 的返回值），不比较状态对象——
+ * gameState 是 reactive 的，读到的是代理、写入的是原始对象，引用比较跨端不可靠。
+ */
 function runAiIfNeeded() {
-  if (gameState.game == null || gameState.game.phase == 'gameover') return
-  const intents = pickAiTurn(gameState.game)
-  for (let i = 0; i < intents.length; i++) {
-    sendIntent(intents[i])
+  let guard = 0
+  while (guard < AI_LOOP_LIMIT) {
+    guard++
+    const g = gameState.game
+    if (g == null || g.phase == 'gameover') return
+
+    const intents = pickAiTurn(g)
+    if (intents.length == 0) return
+
+    let progressed = false
+    for (let i = 0; i < intents.length; i++) {
+      if (sendIntent(intents[i])) progressed = true
+    }
+    // 这一轮意图全被引擎拒绝，再循环也是空转
+    if (!progressed) return
   }
 }
 
@@ -741,10 +859,22 @@ defineExpose({ goLobby, drawRoyal, endPhase })
 .pick-modal-grid {
   flex-direction: row;
   flex-wrap: wrap;
+  justify-content: center;
   padding-bottom: 8px;
 }
 .pick-card-wrap {
   flex-shrink: 0;
+  align-items: center;
+}
+.pick-card-wrap--selected {
+  background-color: #ffcdd2;
+  border-radius: 8px;
+}
+.pick-card-index {
+  font-size: 10px;
+  color: #666;
+  margin-top: 2px;
+  margin-bottom: 4px;
 }
 .discard-overlay {
   position: fixed;
